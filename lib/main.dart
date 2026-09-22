@@ -1,0 +1,604 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import 'router/router_api_client.dart';
+import 'router/router_snapshot.dart';
+
+void main() {
+  runApp(const CellTunerApp());
+}
+
+typedef RouterSnapshotLoader = Future<RouterSnapshot> Function();
+
+class CellTunerApp extends StatelessWidget {
+  const CellTunerApp({super.key, this.snapshotLoader});
+
+  final RouterSnapshotLoader? snapshotLoader;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'CellTuner',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF2563EB),
+          surface: const Color(0xFFF7F8FA),
+        ),
+        scaffoldBackgroundColor: const Color(0xFFF7F8FA),
+        useMaterial3: true,
+      ),
+      home: RouterDashboardScreen(snapshotLoader: snapshotLoader),
+    );
+  }
+}
+
+class RouterDashboardScreen extends StatefulWidget {
+  const RouterDashboardScreen({super.key, this.snapshotLoader});
+
+  final RouterSnapshotLoader? snapshotLoader;
+
+  @override
+  State<RouterDashboardScreen> createState() => _RouterDashboardScreenState();
+}
+
+class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
+  static const _host = '192.168.8.1';
+
+  late final RouterApiClient? _client;
+  late Future<RouterSnapshot> _snapshotFuture;
+  Timer? _refreshTimer;
+  DateTime? _lastUpdated;
+
+  RouterSnapshotLoader get _loader =>
+      widget.snapshotLoader ?? _client!.fetchSnapshot;
+
+  @override
+  void initState() {
+    super.initState();
+    _client =
+        widget.snapshotLoader == null ? RouterApiClient(host: _host) : null;
+    _snapshotFuture = _loadSnapshot();
+    if (widget.snapshotLoader == null) {
+      _refreshTimer = Timer.periodic(
+        const Duration(seconds: 10),
+        (_) => _refresh(),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _client?.close();
+    super.dispose();
+  }
+
+  Future<RouterSnapshot> _loadSnapshot() async {
+    final snapshot = await _loader();
+    if (mounted) {
+      setState(() {
+        _lastUpdated = DateTime.now();
+      });
+    }
+    return snapshot;
+  }
+
+  void _refresh() {
+    setState(() {
+      _snapshotFuture = _loadSnapshot();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('CellTuner'),
+        actions: <Widget>[
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: FutureBuilder<RouterSnapshot>(
+        future: _snapshotFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return _ErrorState(
+              host: _host,
+              error: snapshot.error.toString(),
+              onRefresh: _refresh,
+            );
+          }
+
+          final data = snapshot.requireData;
+          return _DashboardContent(
+            snapshot: data,
+            host: _host,
+            lastUpdated: _lastUpdated,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DashboardContent extends StatelessWidget {
+  const _DashboardContent({
+    required this.snapshot,
+    required this.host,
+    required this.lastUpdated,
+  });
+
+  final RouterSnapshot snapshot;
+  final String host;
+  final DateTime? lastUpdated;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1120),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _Header(
+                host: host,
+                networkType: snapshot.networkType,
+                lastUpdated: lastUpdated,
+              ),
+              const SizedBox(height: 20),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final narrow = constraints.maxWidth < 780;
+                  final cards = <Widget>[
+                    _IdentityCard(snapshot: snapshot),
+                    _WanCard(wan: snapshot.wan),
+                    _SystemCard(system: snapshot.system),
+                  ];
+                  if (narrow) {
+                    return Column(
+                      children: cards
+                          .map(
+                            (card) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: card,
+                            ),
+                          )
+                          .toList(),
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: cards
+                        .map(
+                          (card) => Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: card,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  );
+                },
+              ),
+              const SizedBox(height: 20),
+              _SignalTable(metrics: snapshot.metrics),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.host,
+    required this.networkType,
+    required this.lastUpdated,
+  });
+
+  final String host;
+  final String networkType;
+  final DateTime? lastUpdated;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: <Widget>[
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(Icons.cell_tower, color: theme.colorScheme.onPrimary),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Dialog AirFibre',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  _StatusChip(icon: Icons.router, label: host),
+                  _StatusChip(
+                    icon: Icons.network_cell,
+                    label: networkType.isEmpty ? '-' : networkType,
+                  ),
+                  if (lastUpdated != null)
+                    _StatusChip(
+                      icon: Icons.schedule,
+                      label: _formatClock(lastUpdated!),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 16, color: colors.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text(label),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard(
+      {required this.title, required this.icon, required this.rows});
+
+  final String title;
+  final IconData icon;
+  final List<_InfoRowData> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: colors.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Icon(icon, color: colors.primary, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            for (final row in rows) _InfoRow(row: row),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.row});
+
+  final _InfoRowData row;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            width: 116,
+            child: Text(
+              row.label,
+              style: textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              row.value.isEmpty ? '-' : row.value,
+              textAlign: TextAlign.right,
+              style: textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IdentityCard extends StatelessWidget {
+  const _IdentityCard({required this.snapshot});
+
+  final RouterSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    return _InfoCard(
+      title: 'Subscriber',
+      icon: Icons.sim_card,
+      rows: <_InfoRowData>[
+        _InfoRowData('IMSI', snapshot.imsi),
+        _InfoRowData('IMEI', snapshot.imei),
+      ],
+    );
+  }
+}
+
+class _WanCard extends StatelessWidget {
+  const _WanCard({required this.wan});
+
+  final WanInfo wan;
+
+  @override
+  Widget build(BuildContext context) {
+    return _InfoCard(
+      title: 'WAN',
+      icon: Icons.public,
+      rows: <_InfoRowData>[
+        _InfoRowData('IP Address', wan.ipAddress),
+        _InfoRowData('Preferred DNS', wan.preferredDns),
+        _InfoRowData('Alternate DNS', wan.alternateDns),
+        _InfoRowData('IPv6 Address', wan.ipv6Address),
+        _InfoRowData('IPv6 DNS', wan.preferredIpv6Dns),
+        _InfoRowData('Backup IPv6', wan.backupIpv6Dns),
+      ],
+    );
+  }
+}
+
+class _SystemCard extends StatelessWidget {
+  const _SystemCard({required this.system});
+
+  final SystemInfo system;
+
+  @override
+  Widget build(BuildContext context) {
+    return _InfoCard(
+      title: 'System',
+      icon: Icons.memory,
+      rows: <_InfoRowData>[
+        _InfoRowData('Runtime', system.formattedUptime),
+        _InfoRowData('Firmware', system.firmwareVersion),
+      ],
+    );
+  }
+}
+
+class _SignalTable extends StatelessWidget {
+  const _SignalTable({required this.metrics});
+
+  final List<RouterMetric> metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: colors.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Icon(Icons.monitor_heart, color: colors.primary, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Cellular Signal',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Table(
+                columnWidths: const <int, TableColumnWidth>{
+                  0: FlexColumnWidth(1.1),
+                  1: FlexColumnWidth(),
+                  2: FlexColumnWidth(),
+                },
+                children: <TableRow>[
+                  TableRow(
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainerHighest,
+                    ),
+                    children: const <Widget>[
+                      _TableCell('Metric', header: true),
+                      _TableCell('4G LTE', header: true),
+                      _TableCell('5G NR', header: true),
+                    ],
+                  ),
+                  for (final metric in metrics)
+                    TableRow(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(color: colors.outlineVariant),
+                        ),
+                      ),
+                      children: <Widget>[
+                        _TableCell(metric.label),
+                        _TableCell(metric.valueFor(CellularLayer.lte)),
+                        _TableCell(metric.valueFor(CellularLayer.nr5g)),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TableCell extends StatelessWidget {
+  const _TableCell(this.value, {this.header = false});
+
+  final String value;
+  final bool header;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontWeight: header ? FontWeight.w700 : FontWeight.w500,
+        );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      child: SelectableText(value, style: style),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({
+    required this.host,
+    required this.error,
+    required this.onRefresh,
+  });
+
+  final String host;
+  final String error;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(color: theme.colorScheme.outlineVariant),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(
+                  Icons.wifi_off,
+                  size: 48,
+                  color: theme.colorScheme.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Could not reach $host',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SelectableText(
+                  error,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: onRefresh,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Refresh'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoRowData {
+  const _InfoRowData(this.label, this.value);
+
+  final String label;
+  final String value;
+}
+
+String _formatClock(DateTime time) {
+  final hour = time.hour.toString().padLeft(2, '0');
+  final minute = time.minute.toString().padLeft(2, '0');
+  final second = time.second.toString().padLeft(2, '0');
+  return '$hour:$minute:$second';
+}
