@@ -45,9 +45,9 @@ class RouterDashboardScreen extends StatefulWidget {
 }
 
 class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
-  static const _host = '192.168.8.1';
+  String _host = '192.168.8.1';
 
-  late final RouterApiClient? _client;
+  late RouterApiClient? _client;
   late Future<RouterSnapshot> _snapshotFuture;
   Timer? _refreshTimer;
   DateTime? _lastUpdated;
@@ -94,6 +94,19 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
     });
   }
 
+  void _updateHost(String newHost) {
+    final trimmed = newHost.trim();
+    if (trimmed.isEmpty || trimmed == _host) return;
+    setState(() {
+      _host = trimmed;
+      if (widget.snapshotLoader == null) {
+        _client?.close();
+        _client = RouterApiClient(host: _host);
+      }
+      _refresh();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<RouterSnapshot>(
@@ -134,6 +147,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
             lastUpdated: _lastUpdated,
             section: _selectedSection,
             onRefresh: _refresh,
+            onHostChanged: _updateHost,
           ),
         );
       },
@@ -330,6 +344,7 @@ class _DashboardContent extends StatelessWidget {
     required this.lastUpdated,
     required this.section,
     required this.onRefresh,
+    required this.onHostChanged,
   });
 
   final RouterSnapshot snapshot;
@@ -337,6 +352,7 @@ class _DashboardContent extends StatelessWidget {
   final DateTime? lastUpdated;
   final _DashboardSection section;
   final VoidCallback onRefresh;
+  final ValueChanged<String> onHostChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -356,7 +372,12 @@ class _DashboardContent extends StatelessWidget {
                 constraints: const BoxConstraints(maxWidth: 1120),
                 child: Column(
                   children: <Widget>[
-                    _SectionPage(section: section, snapshot: snapshot),
+                    _SectionPage(
+                      section: section,
+                      snapshot: snapshot,
+                      host: host,
+                      onHostChanged: onHostChanged,
+                    ),
                     const SizedBox(height: 40),
                     Text(
                       'CellTuner - v0.0.1',
@@ -379,10 +400,17 @@ class _DashboardContent extends StatelessWidget {
 }
 
 class _SectionPage extends StatelessWidget {
-  const _SectionPage({required this.section, required this.snapshot});
+  const _SectionPage({
+    required this.section,
+    required this.snapshot,
+    required this.host,
+    required this.onHostChanged,
+  });
 
   final _DashboardSection section;
   final RouterSnapshot snapshot;
+  final String host;
+  final ValueChanged<String> onHostChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -417,7 +445,15 @@ class _SectionPage extends StatelessWidget {
           icon: Icons.sim_card_outlined,
           child: _IdentityCard(snapshot: snapshot),
         ),
-      _DashboardSection.settings => const _SettingsPlaceholder(),
+      _DashboardSection.settings => _PagePanel(
+          title: 'Settings',
+          subtitle: 'Configure router IP and dashboard preferences',
+          icon: Icons.settings_outlined,
+          child: _SettingsCard(
+            host: host,
+            onHostChanged: onHostChanged,
+          ),
+        ),
     };
   }
 }
@@ -506,24 +542,165 @@ class _SignalPlaceholder extends StatelessWidget {
   }
 }
 
-class _SettingsPlaceholder extends StatelessWidget {
-  const _SettingsPlaceholder();
+class _SettingsCard extends StatefulWidget {
+  const _SettingsCard({
+    required this.host,
+    required this.onHostChanged,
+  });
+
+  final String host;
+  final ValueChanged<String> onHostChanged;
+
+  @override
+  State<_SettingsCard> createState() => _SettingsCardState();
+}
+
+class _SettingsCardState extends State<_SettingsCard> {
+  late final TextEditingController _hostController;
+
+  @override
+  void initState() {
+    super.initState();
+    _hostController = TextEditingController(text: widget.host);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SettingsCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.host != widget.host && _hostController.text != widget.host) {
+      _hostController.text = widget.host;
+    }
+  }
+
+  @override
+  void dispose() {
+    _hostController.dispose();
+    super.dispose();
+  }
+
+  void _saveHost() {
+    final newHost = _hostController.text.trim();
+    if (newHost.isNotEmpty) {
+      widget.onHostChanged(newHost);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Router IP updated to $newHost'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     return Container(
-      padding: const EdgeInsets.all(48),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
-        ),
+        border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: const Center(
-        child: Text(
-          'Settings',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.router_outlined, color: colors.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Router Connection',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Router IP Address',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: colors.onSurface,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Enter the gateway IP address of your LTE/5G router (Default: 192.168.8.1).",
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: TextField(
+                    controller: _hostController,
+                    decoration: InputDecoration(
+                      hintText: '192.168.8.1',
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: colors.outlineVariant,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: colors.outlineVariant.withOpacity(0.6),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: colors.primary,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                    onSubmitted: (_) => _saveHost(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                FilledButton(
+                  onPressed: _saveHost,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -572,14 +749,13 @@ class _StatusBar extends StatelessWidget {
                       'Dialog AirFibre',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w800,
-                            letterSpacing: -0.2,
                           ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Connected - $host',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 10,
                         color: colors.onSurfaceVariant,
                         fontWeight: FontWeight.w500,
                       ),
