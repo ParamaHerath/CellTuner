@@ -51,7 +51,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
   late Future<RouterSnapshot> _snapshotFuture;
   Timer? _refreshTimer;
   DateTime? _lastUpdated;
-  _DashboardSection _selectedSection = _DashboardSection.cellularSignal;
+  _DashboardSection _selectedSection = _DashboardSection.status;
   bool _sidebarExpanded = true;
 
   RouterSnapshotLoader get _loader =>
@@ -141,7 +141,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
   }
 }
 
-enum _DashboardSection { cellularSignal, wan, system, subscriber, settings }
+enum _DashboardSection { status, signal, wan, system, subscriber, settings }
 
 class _DashboardShell extends StatelessWidget {
   const _DashboardShell({
@@ -192,7 +192,8 @@ class _NavigationSidebar extends StatelessWidget {
   final VoidCallback onToggle;
 
   static const _items = <(_DashboardSection, String, IconData)>[
-    (_DashboardSection.cellularSignal, 'Cellular Signal', Icons.monitor_heart_outlined),
+    (_DashboardSection.status, 'Status', Icons.info_outline),
+    (_DashboardSection.signal, 'Signal', Icons.monitor_heart_outlined),
     (_DashboardSection.wan, 'WAN', Icons.public_outlined),
     (_DashboardSection.system, 'System', Icons.memory_outlined),
     (_DashboardSection.subscriber, 'Subscriber', Icons.sim_card_outlined),
@@ -386,8 +387,18 @@ class _SectionPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (section) {
-      _DashboardSection.cellularSignal =>
-        _SignalTable(metrics: snapshot.metrics),
+      _DashboardSection.status => _PagePanel(
+          title: 'Status',
+          subtitle: 'Real-time network and cellular metrics',
+          icon: Icons.info_outline,
+          child: _SignalTable(metrics: snapshot.metrics),
+        ),
+      _DashboardSection.signal => _PagePanel(
+          title: 'Signal',
+          subtitle: 'Signal tuning and spectrum analysis',
+          icon: Icons.monitor_heart_outlined,
+          child: const _SignalPlaceholder(),
+        ),
       _DashboardSection.wan => _PagePanel(
           title: 'WAN',
           subtitle: 'Internet connection details',
@@ -441,30 +452,56 @@ class _PagePanel extends StatelessWidget {
               child: Icon(icon, size: 24, color: colors.primary),
             ),
             const SizedBox(width: 14),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.3,
-                      ),
-                ),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colors.onSurfaceVariant,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
                   ),
-                ),
-              ],
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         const SizedBox(height: 24),
         child,
       ],
+    );
+  }
+}
+
+class _SignalPlaceholder extends StatelessWidget {
+  const _SignalPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(48),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
+        ),
+      ),
+      child: const Center(
+        child: Text(
+          'Signal',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+      ),
     );
   }
 }
@@ -524,31 +561,51 @@ class _StatusBar extends StatelessWidget {
           Expanded(
             child: Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 12,
+              spacing: 16,
               runSpacing: 8,
               children: <Widget>[
-                Text(
-                  'Dialog AirFibre',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.2,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      'Dialog AirFibre',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Connected - $host',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
                       ),
+                    ),
+                  ],
                 ),
-                _StatusChip(icon: Icons.router_outlined, label: host),
                 _StatusChip(
                   icon: Icons.cell_tower_outlined,
                   label: networkType.isEmpty ? '-' : networkType,
                   isAccent: networkType.isNotEmpty,
                 ),
-                if (lastUpdated != null)
-                  _StatusChip(
-                    icon: Icons.schedule_rounded,
-                    label: _formatClock(lastUpdated!),
-                  ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
+          if (lastUpdated != null) ...<Widget>[
+            Text(
+              _formatClock(lastUpdated!),
+              style: TextStyle(
+                fontSize: 12,
+                color: colors.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 12),
+          ],
           IconButton(
             tooltip: 'Refresh',
             onPressed: onRefresh,
@@ -814,69 +871,40 @@ class _SignalTable extends StatelessWidget {
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: colors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(Icons.monitor_heart_outlined, color: colors.primary, size: 18),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Cellular Signal',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.2,
-                  ),
-                ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Table(
+          columnWidths: const <int, TableColumnWidth>{
+            0: FlexColumnWidth(1.2),
+            1: FlexColumnWidth(),
+            2: FlexColumnWidth(),
+          },
+          children: <TableRow>[
+            TableRow(
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerHighest.withOpacity(0.6),
+              ),
+              children: const <Widget>[
+                _TableCell('Metric', header: true),
+                _TableCell('4G LTE', header: true),
+                _TableCell('5G NR', header: true),
               ],
             ),
-            const SizedBox(height: 16),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Table(
-                columnWidths: const <int, TableColumnWidth>{
-                  0: FlexColumnWidth(1.2),
-                  1: FlexColumnWidth(),
-                  2: FlexColumnWidth(),
-                },
-                children: <TableRow>[
-                  TableRow(
-                    decoration: BoxDecoration(
-                      color: colors.surfaceContainerHighest.withOpacity(0.6),
+            for (final metric in metrics)
+              TableRow(
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: colors.outlineVariant.withOpacity(0.2),
                     ),
-                    children: const <Widget>[
-                      _TableCell('Metric', header: true),
-                      _TableCell('4G LTE', header: true),
-                      _TableCell('5G NR', header: true),
-                    ],
                   ),
-                  for (final metric in metrics)
-                    TableRow(
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: colors.outlineVariant.withOpacity(0.2),
-                          ),
-                        ),
-                      ),
-                      children: <Widget>[
-                        _TableCell(metric.label),
-                        _TableCell(metric.valueFor(CellularLayer.lte)),
-                        _TableCell(metric.valueFor(CellularLayer.nr5g)),
-                      ],
-                    ),
+                ),
+                children: <Widget>[
+                  _TableCell(metric.label),
+                  _TableCell(metric.valueFor(CellularLayer.lte)),
+                  _TableCell(metric.valueFor(CellularLayer.nr5g)),
                 ],
               ),
-            ),
           ],
         ),
       ),

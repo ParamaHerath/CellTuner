@@ -12,6 +12,7 @@ void main() {
 
     expect(find.text('CellTuner - v0.0.1'), findsOneWidget);
     expect(find.text('Dialog AirFibre'), findsOneWidget);
+    expect(find.text('Connected - 192.168.8.1'), findsOneWidget);
     expect(find.text('4G LTE'), findsOneWidget);
     expect(find.text('5G NR'), findsOneWidget);
     expect(find.text('-103dBm'), findsOneWidget);
@@ -25,6 +26,10 @@ void main() {
       CellTunerApp(snapshotLoader: () async => _sampleSnapshot()),
     );
     await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Signal'));
+    await tester.pumpAndSettle();
+    expect(find.text('Signal'), findsNWidgets(3));
 
     await tester.tap(find.text('WAN'));
     await tester.pumpAndSettle();
