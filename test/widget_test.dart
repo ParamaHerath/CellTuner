@@ -16,7 +16,7 @@ void main() {
     expect(find.text('5G NR'), findsOneWidget);
     expect(find.text('-103dBm'), findsOneWidget);
     expect(find.text('-102dBm'), findsOneWidget);
-    expect(find.text('10.180.12.29'), findsOneWidget);
+    expect(find.text('WAN'), findsOneWidget);
   });
 }
 

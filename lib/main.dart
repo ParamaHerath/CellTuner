@@ -125,6 +125,8 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
             snapshot: data,
             host: _host,
             lastUpdated: _lastUpdated,
+            section: _selectedSection,
+            onRefresh: _refresh,
           ),
         );
       },
@@ -317,69 +319,193 @@ class _DashboardContent extends StatelessWidget {
     required this.snapshot,
     required this.host,
     required this.lastUpdated,
+    required this.section,
+    required this.onRefresh,
   });
 
   final RouterSnapshot snapshot;
   final String host;
   final DateTime? lastUpdated;
+  final _DashboardSection section;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1120),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _Header(
-                host: host,
-                networkType: snapshot.networkType,
-                lastUpdated: lastUpdated,
+    return Column(
+      children: <Widget>[
+        _StatusBar(
+          host: host,
+          networkType: snapshot.networkType,
+          lastUpdated: lastUpdated,
+          onRefresh: onRefresh,
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1120),
+                child: _SectionPage(section: section, snapshot: snapshot),
               ),
-              const SizedBox(height: 20),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final narrow = constraints.maxWidth < 780;
-                  final cards = <Widget>[
-                    _IdentityCard(snapshot: snapshot),
-                    _WanCard(wan: snapshot.wan),
-                    _SystemCard(system: snapshot.system),
-                  ];
-                  if (narrow) {
-                    return Column(
-                      children: cards
-                          .map(
-                            (card) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: card,
-                            ),
-                          )
-                          .toList(),
-                    );
-                  }
-
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: cards
-                        .map(
-                          (card) => Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 12),
-                              child: card,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  );
-                },
-              ),
-              const SizedBox(height: 20),
-              _SignalTable(metrics: snapshot.metrics),
-            ],
+            ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _SectionPage extends StatelessWidget {
+  const _SectionPage({required this.section, required this.snapshot});
+
+  final _DashboardSection section;
+  final RouterSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (section) {
+      _DashboardSection.cellularSignal =>
+        _SignalTable(metrics: snapshot.metrics),
+      _DashboardSection.wan => _PagePanel(
+          title: 'WAN',
+          subtitle: 'Internet connection details',
+          icon: Icons.public,
+          child: _WanCard(wan: snapshot.wan),
+        ),
+      _DashboardSection.system => _PagePanel(
+          title: 'System',
+          subtitle: 'Router runtime and firmware',
+          icon: Icons.memory,
+          child: _SystemCard(system: snapshot.system),
+        ),
+      _DashboardSection.subscriber => _PagePanel(
+          title: 'Subscriber',
+          subtitle: 'SIM and device identity',
+          icon: Icons.sim_card,
+          child: _IdentityCard(snapshot: snapshot),
+        ),
+      _DashboardSection.settings => const _SettingsPlaceholder(),
+    };
+  }
+}
+
+class _PagePanel extends StatelessWidget {
+  const _PagePanel({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Icon(icon, size: 28, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        child,
+      ],
+    );
+  }
+}
+
+class _SettingsPlaceholder extends StatelessWidget {
+  const _SettingsPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text('Settings');
+  }
+}
+
+class _StatusBar extends StatelessWidget {
+  const _StatusBar({
+    required this.host,
+    required this.networkType,
+    required this.lastUpdated,
+    required this.onRefresh,
+  });
+
+  final String host;
+  final String networkType;
+  final DateTime? lastUpdated;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 14),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        runSpacing: 12,
+        spacing: 16,
+        children: <Widget>[
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 16,
+            runSpacing: 8,
+            children: <Widget>[
+              Text(
+                'Dialog AirFibre',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              _StatusChip(icon: Icons.router, label: host),
+              _StatusChip(
+                icon: Icons.network_cell,
+                label: networkType.isEmpty ? '-' : networkType,
+              ),
+            ],
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (lastUpdated != null)
+                _StatusChip(
+                    icon: Icons.schedule, label: _formatClock(lastUpdated!)),
+              IconButton(
+                tooltip: 'Refresh',
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
