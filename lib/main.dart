@@ -47,6 +47,7 @@ class RouterDashboardScreen extends StatefulWidget {
 class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
   String _host = '192.168.8.1';
   double _refreshIntervalSeconds = 1.0;
+  bool _splitCellId = false;
 
   late RouterApiClient? _client;
   late Future<RouterSnapshot> _snapshotFuture;
@@ -124,6 +125,13 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
     });
   }
 
+  void _updateSplitCellId(bool enabled) {
+    if (enabled == _splitCellId) return;
+    setState(() {
+      _splitCellId = enabled;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<RouterSnapshot>(
@@ -162,11 +170,13 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
             snapshot: data,
             host: _host,
             refreshIntervalSeconds: _refreshIntervalSeconds,
+            splitCellId: _splitCellId,
             lastUpdated: _lastUpdated,
             section: _selectedSection,
             onRefresh: _refresh,
             onHostChanged: _updateHost,
             onRefreshIntervalChanged: _updateRefreshInterval,
+            onSplitCellIdChanged: _updateSplitCellId,
           ),
         );
       },
@@ -361,21 +371,25 @@ class _DashboardContent extends StatelessWidget {
     required this.snapshot,
     required this.host,
     required this.refreshIntervalSeconds,
+    required this.splitCellId,
     required this.lastUpdated,
     required this.section,
     required this.onRefresh,
     required this.onHostChanged,
     required this.onRefreshIntervalChanged,
+    required this.onSplitCellIdChanged,
   });
 
   final RouterSnapshot snapshot;
   final String host;
   final double refreshIntervalSeconds;
+  final bool splitCellId;
   final DateTime? lastUpdated;
   final _DashboardSection section;
   final VoidCallback onRefresh;
   final ValueChanged<String> onHostChanged;
   final ValueChanged<double> onRefreshIntervalChanged;
+  final ValueChanged<bool> onSplitCellIdChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -400,8 +414,10 @@ class _DashboardContent extends StatelessWidget {
                       snapshot: snapshot,
                       host: host,
                       refreshIntervalSeconds: refreshIntervalSeconds,
+                      splitCellId: splitCellId,
                       onHostChanged: onHostChanged,
                       onRefreshIntervalChanged: onRefreshIntervalChanged,
+                      onSplitCellIdChanged: onSplitCellIdChanged,
                     ),
                     const SizedBox(height: 40),
                     Text(
@@ -430,16 +446,20 @@ class _SectionPage extends StatelessWidget {
     required this.snapshot,
     required this.host,
     required this.refreshIntervalSeconds,
+    required this.splitCellId,
     required this.onHostChanged,
     required this.onRefreshIntervalChanged,
+    required this.onSplitCellIdChanged,
   });
 
   final _DashboardSection section;
   final RouterSnapshot snapshot;
   final String host;
   final double refreshIntervalSeconds;
+  final bool splitCellId;
   final ValueChanged<String> onHostChanged;
   final ValueChanged<double> onRefreshIntervalChanged;
+  final ValueChanged<bool> onSplitCellIdChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -448,7 +468,10 @@ class _SectionPage extends StatelessWidget {
           title: 'Status',
           subtitle: 'Real-time network and cellular metrics',
           icon: Icons.info_outline,
-          child: _SignalTable(metrics: snapshot.metrics),
+          child: _SignalTable(
+            metrics: snapshot.metrics,
+            splitCellId: splitCellId,
+          ),
         ),
       _DashboardSection.signal => _PagePanel(
           title: 'Signal',
@@ -481,8 +504,10 @@ class _SectionPage extends StatelessWidget {
           child: _SettingsCard(
             host: host,
             refreshIntervalSeconds: refreshIntervalSeconds,
+            splitCellId: splitCellId,
             onHostChanged: onHostChanged,
             onRefreshIntervalChanged: onRefreshIntervalChanged,
+            onSplitCellIdChanged: onSplitCellIdChanged,
           ),
         ),
     };
@@ -577,14 +602,18 @@ class _SettingsCard extends StatefulWidget {
   const _SettingsCard({
     required this.host,
     required this.refreshIntervalSeconds,
+    required this.splitCellId,
     required this.onHostChanged,
     required this.onRefreshIntervalChanged,
+    required this.onSplitCellIdChanged,
   });
 
   final String host;
   final double refreshIntervalSeconds;
+  final bool splitCellId;
   final ValueChanged<String> onHostChanged;
   final ValueChanged<double> onRefreshIntervalChanged;
+  final ValueChanged<bool> onSplitCellIdChanged;
 
   @override
   State<_SettingsCard> createState() => _SettingsCardState();
@@ -820,6 +849,65 @@ class _SettingsCardState extends State<_SettingsCard> {
                   widget.onRefreshIntervalChanged(val);
                 }
               },
+            ),
+            const SizedBox(height: 24),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: colors.outlineVariant.withOpacity(0.3),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.tune_outlined, color: colors.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Cell Identity Formatting',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Split Cell ID',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: colors.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Show LTE and 5G Cell ID as eNB/gNB ID–Sector ID.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Switch(
+                  value: widget.splitCellId,
+                  onChanged: widget.onSplitCellIdChanged,
+                ),
+              ],
             ),
           ],
         ),
@@ -1147,9 +1235,13 @@ class _SystemCard extends StatelessWidget {
 }
 
 class _SignalTable extends StatelessWidget {
-  const _SignalTable({required this.metrics});
+  const _SignalTable({
+    required this.metrics,
+    this.splitCellId = false,
+  });
 
   final List<RouterMetric> metrics;
+  final bool splitCellId;
 
   @override
   Widget build(BuildContext context) {
@@ -1187,25 +1279,55 @@ class _SignalTable extends StatelessWidget {
                 _TableCell('5G NR', header: true),
               ],
             ),
-            for (final metric in metrics)
-              TableRow(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: colors.outlineVariant.withOpacity(0.2),
+            for (final metric in metrics) ...<TableRow>[
+              () {
+                final isCellId = metric.label.toLowerCase() == 'cell id';
+                var lteVal = metric.valueFor(CellularLayer.lte);
+                var nr5gVal = metric.valueFor(CellularLayer.nr5g);
+                if (splitCellId && isCellId) {
+                  if (lteVal != '-') {
+                    lteVal = _formatCellIdString(lteVal, is5g: false);
+                  }
+                  if (nr5gVal != '-') {
+                    nr5gVal = _formatCellIdString(nr5gVal, is5g: true);
+                  }
+                }
+                return TableRow(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: colors.outlineVariant.withOpacity(0.2),
+                      ),
                     ),
                   ),
-                ),
-                children: <Widget>[
-                  _TableCell(metric.label),
-                  _TableCell(metric.valueFor(CellularLayer.lte)),
-                  _TableCell(metric.valueFor(CellularLayer.nr5g)),
-                ],
-              ),
+                  children: <Widget>[
+                    _TableCell(metric.label),
+                    _TableCell(lteVal),
+                    _TableCell(nr5gVal),
+                  ],
+                );
+              }(),
+            ],
           ],
         ),
       ),
     );
+  }
+}
+
+String _formatCellIdString(String raw, {required bool is5g}) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty || trimmed == '-') return raw;
+  final val = int.tryParse(trimmed);
+  if (val == null) return raw;
+  if (!is5g) {
+    final enb = val ~/ 256;
+    final sector = val % 256;
+    return '$enb-$sector';
+  } else {
+    final gnb = val ~/ 16384;
+    final sector = val % 16384;
+    return '$gnb-$sector';
   }
 }
 
