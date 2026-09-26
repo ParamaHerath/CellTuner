@@ -461,47 +461,63 @@ class _StatusBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 14),
+      padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
       decoration: BoxDecoration(
         color: colors.surface,
-        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
-      ),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        runSpacing: 12,
-        spacing: 16,
-        children: <Widget>[
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 16,
-            runSpacing: 8,
-            children: <Widget>[
-              Text(
-                'Dialog AirFibre',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              _StatusChip(icon: Icons.router, label: host),
-              _StatusChip(
-                icon: Icons.network_cell,
-                label: networkType.isEmpty ? '-' : networkType,
-              ),
-            ],
+        border: Border(
+          bottom: BorderSide(
+            color: colors.outlineVariant.withOpacity(0.5),
           ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              if (lastUpdated != null)
+        ),
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
+              children: <Widget>[
+                Text(
+                  'Dialog AirFibre',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                ),
+                _StatusChip(icon: Icons.router_outlined, label: host),
                 _StatusChip(
-                    icon: Icons.schedule, label: _formatClock(lastUpdated!)),
-              IconButton(
-                tooltip: 'Refresh',
-                onPressed: onRefresh,
-                icon: const Icon(Icons.refresh),
+                  icon: Icons.cell_tower_outlined,
+                  label: networkType.isEmpty ? '-' : networkType,
+                  isAccent: networkType.isNotEmpty,
+                ),
+                if (lastUpdated != null)
+                  _StatusChip(
+                    icon: Icons.schedule_rounded,
+                    label: _formatClock(lastUpdated!),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: onRefresh,
+            style: IconButton.styleFrom(
+              backgroundColor: colors.surfaceContainerHighest.withOpacity(0.6),
+              hoverColor: colors.primary.withOpacity(0.1),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+                side: BorderSide(
+                  color: colors.outlineVariant.withOpacity(0.3),
+                ),
               ),
-            ],
+            ),
+            icon: Icon(
+              Icons.refresh_rounded,
+              size: 20,
+              color: colors.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -509,88 +525,49 @@ class _StatusBar extends StatelessWidget {
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({
-    required this.host,
-    required this.networkType,
-    required this.lastUpdated,
-  });
-
-  final String host;
-  final String networkType;
-  final DateTime? lastUpdated;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      children: <Widget>[
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primary,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(Icons.cell_tower, color: theme.colorScheme.onPrimary),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'Dialog AirFibre',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: <Widget>[
-                  _StatusChip(icon: Icons.router, label: host),
-                  _StatusChip(
-                    icon: Icons.network_cell,
-                    label: networkType.isEmpty ? '-' : networkType,
-                  ),
-                  if (lastUpdated != null)
-                    _StatusChip(
-                      icon: Icons.schedule,
-                      label: _formatClock(lastUpdated!),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.icon, required this.label});
+  const _StatusChip({
+    required this.icon,
+    required this.label,
+    this.isAccent = false,
+  });
 
   final IconData icon;
   final String label;
+  final bool isAccent;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final bg = isAccent
+        ? colors.primaryContainer.withOpacity(0.4)
+        : colors.surfaceContainerHighest.withOpacity(0.5);
+    final fg = isAccent ? colors.primary : colors.onSurfaceVariant;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isAccent
+              ? colors.primary.withOpacity(0.2)
+              : colors.outlineVariant.withOpacity(0.3),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, size: 16, color: colors.onSurfaceVariant),
+          Icon(icon, size: 14, color: fg),
           const SizedBox(width: 6),
-          Text(label),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: fg,
+            ),
+          ),
         ],
       ),
     );
