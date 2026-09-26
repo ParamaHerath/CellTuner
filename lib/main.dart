@@ -201,22 +201,16 @@ class _NavigationSidebar extends StatelessWidget {
       color: colors.surface,
       child: Column(
         children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
-            child: Row(
-              mainAxisAlignment: expanded ? MainAxisAlignment.end : MainAxisAlignment.center,
-              children: <Widget>[
-                IconButton(
-                  tooltip:
-                      expanded ? 'Collapse navigation' : 'Expand navigation',
-                  onPressed: onToggle,
-                  icon: Icon(
-                    expanded ? Icons.chevron_left : Icons.chevron_right,
-                  ),
-                ),
-              ],
-            ),
+          const SizedBox(height: 12),
+          _NavigationItem(
+            icon: Icons.menu,
+            label: '',
+            selected: false,
+            expanded: expanded,
+            onTap: onToggle,
+            tooltip: expanded ? 'Collapse navigation' : 'Expand navigation',
           ),
+          const SizedBox(height: 12),
           for (final item in _items)
             _NavigationItem(
               icon: item.$3,
@@ -247,6 +241,7 @@ class _NavigationItem extends StatelessWidget {
     required this.selected,
     required this.expanded,
     required this.onTap,
+    this.tooltip,
   });
 
   final IconData icon;
@@ -254,14 +249,16 @@ class _NavigationItem extends StatelessWidget {
   final bool selected;
   final bool expanded;
   final VoidCallback onTap;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final message = tooltip ?? (expanded ? '' : label);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       child: Tooltip(
-        message: expanded ? '' : label,
+        message: message,
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: onTap,
@@ -278,7 +275,7 @@ class _NavigationItem extends StatelessWidget {
               children: <Widget>[
                 Icon(icon,
                     color: selected ? colors.primary : colors.onSurfaceVariant),
-                if (expanded) ...<Widget>[
+                if (expanded && label.isNotEmpty) ...<Widget>[
                   const SizedBox(width: 12),
                   Flexible(
                     child: Text(
