@@ -46,6 +46,7 @@ class RouterDashboardScreen extends StatefulWidget {
 
 class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
   String _host = '192.168.8.1';
+  int _refreshIntervalSeconds = 1;
 
   late RouterApiClient? _client;
   late Future<RouterSnapshot> _snapshotFuture;
@@ -64,11 +65,16 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
         widget.snapshotLoader == null ? RouterApiClient(host: _host) : null;
     _snapshotFuture = _loadSnapshot();
     if (widget.snapshotLoader == null) {
-      _refreshTimer = Timer.periodic(
-        const Duration(seconds: 10),
-        (_) => _refresh(),
-      );
+      _startRefreshTimer();
     }
+  }
+
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(
+      Duration(seconds: _refreshIntervalSeconds),
+      (_) => _refresh(),
+    );
   }
 
   @override
@@ -104,6 +110,16 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
         _client = RouterApiClient(host: _host);
       }
       _refresh();
+    });
+  }
+
+  void _updateRefreshInterval(int seconds) {
+    if (seconds == _refreshIntervalSeconds) return;
+    setState(() {
+      _refreshIntervalSeconds = seconds;
+      if (widget.snapshotLoader == null) {
+        _startRefreshTimer();
+      }
     });
   }
 
@@ -144,10 +160,12 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
           child: _DashboardContent(
             snapshot: data,
             host: _host,
+            refreshIntervalSeconds: _refreshIntervalSeconds,
             lastUpdated: _lastUpdated,
             section: _selectedSection,
             onRefresh: _refresh,
             onHostChanged: _updateHost,
+            onRefreshIntervalChanged: _updateRefreshInterval,
           ),
         );
       },
@@ -341,18 +359,22 @@ class _DashboardContent extends StatelessWidget {
   const _DashboardContent({
     required this.snapshot,
     required this.host,
+    required this.refreshIntervalSeconds,
     required this.lastUpdated,
     required this.section,
     required this.onRefresh,
     required this.onHostChanged,
+    required this.onRefreshIntervalChanged,
   });
 
   final RouterSnapshot snapshot;
   final String host;
+  final int refreshIntervalSeconds;
   final DateTime? lastUpdated;
   final _DashboardSection section;
   final VoidCallback onRefresh;
   final ValueChanged<String> onHostChanged;
+  final ValueChanged<int> onRefreshIntervalChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -376,7 +398,9 @@ class _DashboardContent extends StatelessWidget {
                       section: section,
                       snapshot: snapshot,
                       host: host,
+                      refreshIntervalSeconds: refreshIntervalSeconds,
                       onHostChanged: onHostChanged,
+                      onRefreshIntervalChanged: onRefreshIntervalChanged,
                     ),
                     const SizedBox(height: 40),
                     Text(
@@ -404,13 +428,17 @@ class _SectionPage extends StatelessWidget {
     required this.section,
     required this.snapshot,
     required this.host,
+    required this.refreshIntervalSeconds,
     required this.onHostChanged,
+    required this.onRefreshIntervalChanged,
   });
 
   final _DashboardSection section;
   final RouterSnapshot snapshot;
   final String host;
+  final int refreshIntervalSeconds;
   final ValueChanged<String> onHostChanged;
+  final ValueChanged<int> onRefreshIntervalChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -451,7 +479,9 @@ class _SectionPage extends StatelessWidget {
           icon: Icons.settings_outlined,
           child: _SettingsCard(
             host: host,
+            refreshIntervalSeconds: refreshIntervalSeconds,
             onHostChanged: onHostChanged,
+            onRefreshIntervalChanged: onRefreshIntervalChanged,
           ),
         ),
     };
@@ -545,11 +575,15 @@ class _SignalPlaceholder extends StatelessWidget {
 class _SettingsCard extends StatefulWidget {
   const _SettingsCard({
     required this.host,
+    required this.refreshIntervalSeconds,
     required this.onHostChanged,
+    required this.onRefreshIntervalChanged,
   });
 
   final String host;
+  final int refreshIntervalSeconds;
   final ValueChanged<String> onHostChanged;
+  final ValueChanged<int> onRefreshIntervalChanged;
 
   @override
   State<_SettingsCard> createState() => _SettingsCardState();
@@ -557,6 +591,8 @@ class _SettingsCard extends StatefulWidget {
 
 class _SettingsCardState extends State<_SettingsCard> {
   late final TextEditingController _hostController;
+
+  static const _intervalOptions = <int>[1, 2, 3, 5, 10];
 
   @override
   void initState() {
@@ -699,6 +735,89 @@ class _SettingsCardState extends State<_SettingsCard> {
                   child: const Text('Save'),
                 ),
               ],
+            ),
+            const SizedBox(height: 24),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: colors.outlineVariant.withOpacity(0.3),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.timer_outlined, color: colors.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Polling & Refresh',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Update Frequency',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: colors.onSurface,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Select how often the dashboard automatically polls the router for metrics (Default: 1s).',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              value: widget.refreshIntervalSeconds,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: colors.outlineVariant,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: colors.outlineVariant.withOpacity(0.6),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: colors.primary,
+                    width: 1.5,
+                  ),
+                ),
+              ),
+              items: _intervalOptions.map((seconds) {
+                return DropdownMenuItem<int>(
+                  value: seconds,
+                  child: Text('${seconds}s'),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  widget.onRefreshIntervalChanged(val);
+                }
+              },
             ),
           ],
         ),
