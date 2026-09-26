@@ -50,6 +50,8 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
   late Future<RouterSnapshot> _snapshotFuture;
   Timer? _refreshTimer;
   DateTime? _lastUpdated;
+  _DashboardSection _selectedSection = _DashboardSection.cellularSignal;
+  bool _sidebarExpanded = true;
 
   RouterSnapshotLoader get _loader =>
       widget.snapshotLoader ?? _client!.fetchSnapshot;
@@ -93,41 +95,218 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('CellTuner'),
-        actions: <Widget>[
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: FutureBuilder<RouterSnapshot>(
-        future: _snapshotFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return FutureBuilder<RouterSnapshot>(
+      future: _snapshotFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-          if (snapshot.hasError) {
-            return _ErrorState(
-              host: _host,
-              error: snapshot.error.toString(),
-              onRefresh: _refresh,
-            );
-          }
+        if (snapshot.hasError) {
+          return _ErrorState(
+            host: _host,
+            error: snapshot.error.toString(),
+            onRefresh: _refresh,
+          );
+        }
 
-          final data = snapshot.requireData;
-          return _DashboardContent(
+        final data = snapshot.requireData;
+        return _DashboardShell(
+          selectedSection: _selectedSection,
+          sidebarExpanded: _sidebarExpanded,
+          onSectionSelected: (section) {
+            setState(() => _selectedSection = section);
+          },
+          onToggleSidebar: () {
+            setState(() => _sidebarExpanded = !_sidebarExpanded);
+          },
+          child: _DashboardContent(
             snapshot: data,
             host: _host,
             lastUpdated: _lastUpdated,
-          );
-        },
+          ),
+        );
+      },
+    );
+  }
+}
+
+enum _DashboardSection { cellularSignal, wan, system, subscriber, settings }
+
+class _DashboardShell extends StatelessWidget {
+  const _DashboardShell({
+    required this.selectedSection,
+    required this.sidebarExpanded,
+    required this.onSectionSelected,
+    required this.onToggleSidebar,
+    required this.child,
+  });
+
+  final _DashboardSection selectedSection;
+  final bool sidebarExpanded;
+  final ValueChanged<_DashboardSection> onSectionSelected;
+  final VoidCallback onToggleSidebar;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Row(
+          children: <Widget>[
+            _NavigationSidebar(
+              selectedSection: selectedSection,
+              expanded: sidebarExpanded,
+              onSectionSelected: onSectionSelected,
+              onToggle: onToggleSidebar,
+            ),
+            Expanded(child: child),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavigationSidebar extends StatelessWidget {
+  const _NavigationSidebar({
+    required this.selectedSection,
+    required this.expanded,
+    required this.onSectionSelected,
+    required this.onToggle,
+  });
+
+  final _DashboardSection selectedSection;
+  final bool expanded;
+  final ValueChanged<_DashboardSection> onSectionSelected;
+  final VoidCallback onToggle;
+
+  static const _items = <(_DashboardSection, String, IconData)>[
+    (_DashboardSection.cellularSignal, 'Cellular Signal', Icons.monitor_heart),
+    (_DashboardSection.wan, 'WAN', Icons.public),
+    (_DashboardSection.system, 'System', Icons.memory),
+    (_DashboardSection.subscriber, 'Subscriber', Icons.sim_card),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      width: expanded ? 248 : 76,
+      color: colors.surface,
+      child: Column(
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 12, 24),
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.cell_tower, color: colors.primary, size: 28),
+                if (expanded) ...<Widget>[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'CellTuner',
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                ],
+                const Spacer(),
+                IconButton(
+                  tooltip:
+                      expanded ? 'Collapse navigation' : 'Expand navigation',
+                  onPressed: onToggle,
+                  icon: Icon(
+                    expanded ? Icons.chevron_left : Icons.chevron_right,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          for (final item in _items)
+            _NavigationItem(
+              icon: item.$3,
+              label: item.$2,
+              selected: selectedSection == item.$1,
+              expanded: expanded,
+              onTap: () => onSectionSelected(item.$1),
+            ),
+          const Spacer(),
+          _NavigationItem(
+            icon: Icons.settings_outlined,
+            label: 'Settings',
+            selected: selectedSection == _DashboardSection.settings,
+            expanded: expanded,
+            onTap: () => onSectionSelected(_DashboardSection.settings),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavigationItem extends StatelessWidget {
+  const _NavigationItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.expanded,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      child: Tooltip(
+        message: expanded ? '' : label,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: Container(
+            height: 48,
+            padding: EdgeInsets.symmetric(horizontal: expanded ? 14 : 12),
+            decoration: BoxDecoration(
+              color: selected ? colors.secondaryContainer : null,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment:
+                  expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+              children: <Widget>[
+                Icon(icon,
+                    color: selected ? colors.primary : colors.onSurfaceVariant),
+                if (expanded) ...<Widget>[
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: selected ? colors.primary : colors.onSurface,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
