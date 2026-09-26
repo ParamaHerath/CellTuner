@@ -10,7 +10,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('CellTuner'), findsWidgets);
+    expect(find.text('CellTuner - v0.0.1'), findsOneWidget);
     expect(find.text('Dialog AirFibre'), findsOneWidget);
     expect(find.text('4G LTE'), findsOneWidget);
     expect(find.text('5G NR'), findsOneWidget);

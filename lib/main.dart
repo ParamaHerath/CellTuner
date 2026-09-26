@@ -202,23 +202,10 @@ class _NavigationSidebar extends StatelessWidget {
       child: Column(
         children: <Widget>[
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 12, 24),
+            padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
             child: Row(
+              mainAxisAlignment: expanded ? MainAxisAlignment.end : MainAxisAlignment.center,
               children: <Widget>[
-                Icon(Icons.cell_tower, color: colors.primary, size: 28),
-                if (expanded) ...<Widget>[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'CellTuner',
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                  ),
-                ],
-                const Spacer(),
                 IconButton(
                   tooltip:
                       expanded ? 'Collapse navigation' : 'Expand navigation',
@@ -345,7 +332,19 @@ class _DashboardContent extends StatelessWidget {
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1120),
-                child: _SectionPage(section: section, snapshot: snapshot),
+                child: Column(
+                  children: <Widget>[
+                    _SectionPage(section: section, snapshot: snapshot),
+                    const SizedBox(height: 32),
+                    Text(
+                      'CellTuner - v0.0.1',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
