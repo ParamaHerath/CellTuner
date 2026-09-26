@@ -24,9 +24,10 @@ class CellTunerApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF2563EB),
-          surface: const Color(0xFFF7F8FA),
+          surface: Colors.white,
+          surfaceContainerHighest: const Color(0xFFF1F5F9),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF7F8FA),
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
         useMaterial3: true,
       ),
       home: RouterDashboardScreen(snapshotLoader: snapshotLoader),
@@ -100,14 +101,20 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
         }
 
         if (snapshot.hasError) {
-          return _ErrorState(
-            host: _host,
-            error: snapshot.error.toString(),
-            onRefresh: _refresh,
+          return Scaffold(
+            body: _ErrorState(
+              host: _host,
+              error: snapshot.error.toString(),
+              onRefresh: _refresh,
+            ),
           );
         }
 
@@ -185,10 +192,10 @@ class _NavigationSidebar extends StatelessWidget {
   final VoidCallback onToggle;
 
   static const _items = <(_DashboardSection, String, IconData)>[
-    (_DashboardSection.cellularSignal, 'Cellular Signal', Icons.monitor_heart),
-    (_DashboardSection.wan, 'WAN', Icons.public),
-    (_DashboardSection.system, 'System', Icons.memory),
-    (_DashboardSection.subscriber, 'Subscriber', Icons.sim_card),
+    (_DashboardSection.cellularSignal, 'Cellular Signal', Icons.monitor_heart_outlined),
+    (_DashboardSection.wan, 'WAN', Icons.public_outlined),
+    (_DashboardSection.system, 'System', Icons.memory_outlined),
+    (_DashboardSection.subscriber, 'Subscriber', Icons.sim_card_outlined),
   ];
 
   @override
@@ -198,19 +205,26 @@ class _NavigationSidebar extends StatelessWidget {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       width: expanded ? 248 : 76,
-      color: colors.surface,
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(
+          right: BorderSide(
+            color: colors.outlineVariant.withOpacity(0.3),
+          ),
+        ),
+      ),
       child: Column(
         children: <Widget>[
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           _NavigationItem(
-            icon: Icons.menu,
+            icon: Icons.menu_rounded,
             label: '',
             selected: false,
             expanded: expanded,
             onTap: onToggle,
             tooltip: expanded ? 'Collapse navigation' : 'Expand navigation',
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           for (final item in _items)
             _NavigationItem(
               icon: item.$3,
@@ -255,36 +269,46 @@ class _NavigationItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final message = tooltip ?? (expanded ? '' : label);
+    final activeBg = colors.primary.withOpacity(0.12);
+    final activeFg = colors.primary;
+    final inactiveFg = colors.onSurfaceVariant;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       child: Tooltip(
         message: message,
         child: InkWell(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           onTap: onTap,
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
             height: 48,
             padding: EdgeInsets.symmetric(horizontal: expanded ? 14 : 12),
             decoration: BoxDecoration(
-              color: selected ? colors.secondaryContainer : null,
-              borderRadius: BorderRadius.circular(8),
+              color: selected ? activeBg : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               mainAxisAlignment:
                   expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
               children: <Widget>[
-                Icon(icon,
-                    color: selected ? colors.primary : colors.onSurfaceVariant),
+                Icon(
+                  icon,
+                  size: 22,
+                  color: selected ? activeFg : inactiveFg,
+                ),
                 if (expanded && label.isNotEmpty) ...<Widget>[
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   Flexible(
                     child: Text(
                       label,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: selected ? colors.primary : colors.onSurface,
+                        fontSize: 14,
+                        color: selected ? activeFg : colors.onSurface,
                         fontWeight:
                             selected ? FontWeight.w700 : FontWeight.w500,
+                        letterSpacing: -0.1,
                       ),
                     ),
                   ),
@@ -325,18 +349,20 @@ class _DashboardContent extends StatelessWidget {
         ),
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(28),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1120),
                 child: Column(
                   children: <Widget>[
                     _SectionPage(section: section, snapshot: snapshot),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 40),
                     Text(
                       'CellTuner - v0.0.1',
                       style: TextStyle(
                         fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.3,
                         color: Theme.of(context).colorScheme.outline,
                       ),
                     ),
@@ -365,19 +391,19 @@ class _SectionPage extends StatelessWidget {
       _DashboardSection.wan => _PagePanel(
           title: 'WAN',
           subtitle: 'Internet connection details',
-          icon: Icons.public,
+          icon: Icons.public_outlined,
           child: _WanCard(wan: snapshot.wan),
         ),
       _DashboardSection.system => _PagePanel(
           title: 'System',
           subtitle: 'Router runtime and firmware',
-          icon: Icons.memory,
+          icon: Icons.memory_outlined,
           child: _SystemCard(system: snapshot.system),
         ),
       _DashboardSection.subscriber => _PagePanel(
           title: 'Subscriber',
           subtitle: 'SIM and device identity',
-          icon: Icons.sim_card,
+          icon: Icons.sim_card_outlined,
           child: _IdentityCard(snapshot: snapshot),
         ),
       _DashboardSection.settings => const _SettingsPlaceholder(),
@@ -400,26 +426,36 @@ class _PagePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Row(
           children: <Widget>[
-            Icon(icon, size: 28, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: colors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 24, color: colors.primary),
+            ),
+            const SizedBox(width: 14),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
                       ),
                 ),
                 Text(
                   subtitle,
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 13,
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -438,8 +474,21 @@ class _SettingsPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Settings'),
+    return Container(
+      padding: const EdgeInsets.all(48),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
+        ),
+      ),
+      child: const Center(
+        child: Text(
+          'Settings',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+      ),
     );
   }
 }
@@ -466,7 +515,7 @@ class _StatusBar extends StatelessWidget {
         color: colors.surface,
         border: Border(
           bottom: BorderSide(
-            color: colors.outlineVariant.withOpacity(0.5),
+            color: colors.outlineVariant.withOpacity(0.4),
           ),
         ),
       ),
@@ -481,7 +530,7 @@ class _StatusBar extends StatelessWidget {
                 Text(
                   'Dialog AirFibre',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         letterSpacing: -0.2,
                       ),
                 ),
@@ -541,11 +590,11 @@ class _StatusChip extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final bg = isAccent
         ? colors.primaryContainer.withOpacity(0.4)
-        : colors.surfaceContainerHighest.withOpacity(0.5);
+        : colors.surfaceContainerHighest.withOpacity(0.6);
     final fg = isAccent ? colors.primary : colors.onSurfaceVariant;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(20),
@@ -575,8 +624,11 @@ class _StatusChip extends StatelessWidget {
 }
 
 class _InfoCard extends StatelessWidget {
-  const _InfoCard(
-      {required this.title, required this.icon, required this.rows});
+  const _InfoCard({
+    required this.title,
+    required this.icon,
+    required this.rows,
+  });
 
   final String title;
   final IconData icon;
@@ -586,31 +638,54 @@ class _InfoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: colors.outlineVariant),
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Row(
               children: <Widget>[
-                Icon(icon, color: colors.primary, size: 20),
-                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: colors.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            for (final row in rows) _InfoRow(row: row),
+            const SizedBox(height: 16),
+            for (var i = 0; i < rows.length; i++) ...<Widget>[
+              if (i > 0)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: colors.outlineVariant.withOpacity(0.2),
+                ),
+              _InfoRow(row: rows[i]),
+            ],
           ],
         ),
       ),
@@ -626,17 +701,19 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final colors = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           SizedBox(
-            width: 116,
+            width: 130,
             child: Text(
               row.label,
               style: textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 13,
+                color: colors.onSurfaceVariant,
               ),
             ),
           ),
@@ -645,7 +722,9 @@ class _InfoRow extends StatelessWidget {
               row.value.isEmpty ? '-' : row.value,
               textAlign: TextAlign.right,
               style: textTheme.bodyMedium?.copyWith(
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
+                color: colors.onSurface,
               ),
             ),
           ),
@@ -664,7 +743,7 @@ class _IdentityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _InfoCard(
       title: 'Subscriber',
-      icon: Icons.sim_card,
+      icon: Icons.sim_card_outlined,
       rows: <_InfoRowData>[
         _InfoRowData('IMSI', snapshot.imsi),
         _InfoRowData('IMEI', snapshot.imei),
@@ -682,7 +761,7 @@ class _WanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _InfoCard(
       title: 'WAN',
-      icon: Icons.public,
+      icon: Icons.public_outlined,
       rows: <_InfoRowData>[
         _InfoRowData('IP Address', wan.ipAddress),
         _InfoRowData('Preferred DNS', wan.preferredDns),
@@ -704,7 +783,7 @@ class _SystemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _InfoCard(
       title: 'System',
-      icon: Icons.memory,
+      icon: Icons.memory_outlined,
       rows: <_InfoRowData>[
         _InfoRowData('Runtime', system.formattedUptime),
         _InfoRowData('Firmware', system.firmwareVersion),
@@ -722,42 +801,57 @@ class _SignalTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: colors.outlineVariant),
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Row(
               children: <Widget>[
-                Icon(Icons.monitor_heart, color: colors.primary, size: 20),
-                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.monitor_heart_outlined, color: colors.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
                 Text(
                   'Cellular Signal',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
               child: Table(
                 columnWidths: const <int, TableColumnWidth>{
-                  0: FlexColumnWidth(1.1),
+                  0: FlexColumnWidth(1.2),
                   1: FlexColumnWidth(),
                   2: FlexColumnWidth(),
                 },
                 children: <TableRow>[
                   TableRow(
                     decoration: BoxDecoration(
-                      color: colors.surfaceContainerHighest,
+                      color: colors.surfaceContainerHighest.withOpacity(0.6),
                     ),
                     children: const <Widget>[
                       _TableCell('Metric', header: true),
@@ -769,7 +863,9 @@ class _SignalTable extends StatelessWidget {
                     TableRow(
                       decoration: BoxDecoration(
                         border: Border(
-                          bottom: BorderSide(color: colors.outlineVariant),
+                          bottom: BorderSide(
+                            color: colors.outlineVariant.withOpacity(0.2),
+                          ),
                         ),
                       ),
                       children: <Widget>[
@@ -797,10 +893,12 @@ class _TableCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontSize: header ? 13 : 14,
           fontWeight: header ? FontWeight.w700 : FontWeight.w500,
+          color: header ? Theme.of(context).colorScheme.onSurfaceVariant : null,
         );
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: SelectableText(value, style: style),
     );
   }
@@ -823,23 +921,37 @@ class _ErrorState extends StatelessWidget {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
-        child: Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(color: theme.colorScheme.outlineVariant),
+        child: Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.4)),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(28),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Icon(
-                  Icons.wifi_off,
-                  size: 48,
-                  color: theme.colorScheme.error,
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.errorContainer.withOpacity(0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.wifi_off_rounded,
+                    size: 36,
+                    color: theme.colorScheme.error,
+                  ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 Text(
                   'Could not reach $host',
                   style: theme.textTheme.titleLarge?.copyWith(
@@ -854,10 +966,16 @@ class _ErrorState extends StatelessWidget {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
                 FilledButton.icon(
                   onPressed: onRefresh,
-                  icon: const Icon(Icons.refresh),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.refresh_rounded),
                   label: const Text('Refresh'),
                 ),
               ],
