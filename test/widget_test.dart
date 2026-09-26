@@ -18,6 +18,30 @@ void main() {
     expect(find.text('-102dBm'), findsOneWidget);
     expect(find.text('WAN'), findsOneWidget);
   });
+
+  testWidgets('navigates between dashboard sections',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      CellTunerApp(snapshotLoader: () async => _sampleSnapshot()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('WAN'));
+    await tester.pumpAndSettle();
+    expect(find.text('10.180.12.29'), findsOneWidget);
+
+    await tester.tap(find.text('System'));
+    await tester.pumpAndSettle();
+    expect(find.text('9.4.6.0'), findsOneWidget);
+
+    await tester.tap(find.text('Subscriber'));
+    await tester.pumpAndSettle();
+    expect(find.text('413027083002840'), findsOneWidget);
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.text('Settings'), findsNWidgets(2));
+  });
 }
 
 RouterSnapshot _sampleSnapshot() {

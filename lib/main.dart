@@ -442,7 +442,9 @@ class _SettingsPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Text('Settings');
+    return const Center(
+      child: Text('Settings'),
+    );
   }
 }
 
