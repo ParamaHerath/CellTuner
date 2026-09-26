@@ -46,7 +46,7 @@ class RouterDashboardScreen extends StatefulWidget {
 
 class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
   String _host = '192.168.8.1';
-  int _refreshIntervalSeconds = 1;
+  double _refreshIntervalSeconds = 1.0;
 
   late RouterApiClient? _client;
   late Future<RouterSnapshot> _snapshotFuture;
@@ -71,8 +71,9 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
 
   void _startRefreshTimer() {
     _refreshTimer?.cancel();
+    final ms = (_refreshIntervalSeconds * 1000).round();
     _refreshTimer = Timer.periodic(
-      Duration(seconds: _refreshIntervalSeconds),
+      Duration(milliseconds: ms),
       (_) => _refresh(),
     );
   }
@@ -113,7 +114,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
     });
   }
 
-  void _updateRefreshInterval(int seconds) {
+  void _updateRefreshInterval(double seconds) {
     if (seconds == _refreshIntervalSeconds) return;
     setState(() {
       _refreshIntervalSeconds = seconds;
@@ -369,12 +370,12 @@ class _DashboardContent extends StatelessWidget {
 
   final RouterSnapshot snapshot;
   final String host;
-  final int refreshIntervalSeconds;
+  final double refreshIntervalSeconds;
   final DateTime? lastUpdated;
   final _DashboardSection section;
   final VoidCallback onRefresh;
   final ValueChanged<String> onHostChanged;
-  final ValueChanged<int> onRefreshIntervalChanged;
+  final ValueChanged<double> onRefreshIntervalChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -436,9 +437,9 @@ class _SectionPage extends StatelessWidget {
   final _DashboardSection section;
   final RouterSnapshot snapshot;
   final String host;
-  final int refreshIntervalSeconds;
+  final double refreshIntervalSeconds;
   final ValueChanged<String> onHostChanged;
-  final ValueChanged<int> onRefreshIntervalChanged;
+  final ValueChanged<double> onRefreshIntervalChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -581,9 +582,9 @@ class _SettingsCard extends StatefulWidget {
   });
 
   final String host;
-  final int refreshIntervalSeconds;
+  final double refreshIntervalSeconds;
   final ValueChanged<String> onHostChanged;
-  final ValueChanged<int> onRefreshIntervalChanged;
+  final ValueChanged<double> onRefreshIntervalChanged;
 
   @override
   State<_SettingsCard> createState() => _SettingsCardState();
@@ -592,7 +593,7 @@ class _SettingsCard extends StatefulWidget {
 class _SettingsCardState extends State<_SettingsCard> {
   late final TextEditingController _hostController;
 
-  static const _intervalOptions = <int>[1, 2, 3, 5, 10];
+  static const _intervalOptions = <double>[0.25, 0.5, 1.0, 2.0, 5.0, 10.0];
 
   @override
   void initState() {
@@ -779,7 +780,7 @@ class _SettingsCardState extends State<_SettingsCard> {
               ),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<int>(
+            DropdownButtonFormField<double>(
               value: widget.refreshIntervalSeconds,
               decoration: InputDecoration(
                 isDense: true,
@@ -808,9 +809,10 @@ class _SettingsCardState extends State<_SettingsCard> {
                 ),
               ),
               items: _intervalOptions.map((seconds) {
-                return DropdownMenuItem<int>(
+                final label = seconds < 1 ? '${seconds}s' : '${seconds.toInt()}s';
+                return DropdownMenuItem<double>(
                   value: seconds,
-                  child: Text('${seconds}s'),
+                  child: Text(label),
                 );
               }).toList(),
               onChanged: (val) {
