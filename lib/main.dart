@@ -45,7 +45,8 @@ class RouterDashboardScreen extends StatefulWidget {
   State<RouterDashboardScreen> createState() => _RouterDashboardScreenState();
 }
 
-class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
+class _RouterDashboardScreenState extends State<RouterDashboardScreen>
+    with SingleTickerProviderStateMixin {
   String _host = '192.168.8.1';
   double _refreshIntervalSeconds = 1.0;
   bool _splitCellId = false;
@@ -56,6 +57,11 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
   DateTime? _lastUpdated;
   _DashboardSection _selectedSection = _DashboardSection.status;
   bool _sidebarExpanded = true;
+  bool _mobileSidebarOpen = false;
+  late final AnimationController _mobileMenuAnimation = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 250),
+  );
   final List<SignalMetricSample> _signalHistory = <SignalMetricSample>[];
   Set<String> _selectedSignalMetrics = <String>{'RSSI', 'RSRP', 'RSRQ', 'SINR'};
   String _signalTechMode = 'Both (4G & 5G)';
@@ -86,8 +92,20 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _mobileMenuAnimation.dispose();
     _client?.close();
     super.dispose();
+  }
+
+  void _toggleMobileSidebar() {
+    setState(() {
+      _mobileSidebarOpen = !_mobileSidebarOpen;
+      if (_mobileSidebarOpen) {
+        _mobileMenuAnimation.forward();
+      } else {
+        _mobileMenuAnimation.reverse();
+      }
+    });
   }
 
   Future<RouterSnapshot> _loadSnapshot() async {
@@ -193,14 +211,27 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
         }
 
         final data = snapshot.requireData;
+        final isMobile = _isMobileLayout(context);
         return _DashboardShell(
           selectedSection: _selectedSection,
           sidebarExpanded: _sidebarExpanded,
+          isMobile: isMobile,
+          menuAnimation: _mobileMenuAnimation,
           onSectionSelected: (section) {
-            setState(() => _selectedSection = section);
+            setState(() {
+              _selectedSection = section;
+              if (isMobile && _mobileSidebarOpen) {
+                _mobileSidebarOpen = false;
+                _mobileMenuAnimation.reverse();
+              }
+            });
           },
           onToggleSidebar: () {
-            setState(() => _sidebarExpanded = !_sidebarExpanded);
+            if (isMobile) {
+              _toggleMobileSidebar();
+            } else {
+              setState(() => _sidebarExpanded = !_sidebarExpanded);
+            }
           },
           statusBar: _StatusBar(
             host: _host,
@@ -208,6 +239,9 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
             metrics: data.metrics,
             lastUpdated: _lastUpdated,
             onRefresh: _refresh,
+            isMobile: isMobile,
+            onToggleSidebar: _toggleMobileSidebar,
+            menuAnimation: _mobileMenuAnimation,
           ),
           child: _DashboardContent(
             snapshot: data,
@@ -238,6 +272,13 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
 
 enum _DashboardSection { status, signal, wan, system, subscriber, settings }
 
+bool _isMobileLayout(BuildContext context) {
+  final platform = Theme.of(context).platform;
+  final isMobilePlatform =
+      platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+  return isMobilePlatform || MediaQuery.sizeOf(context).width < 600;
+}
+
 class _DashboardShell extends StatelessWidget {
   const _DashboardShell({
     required this.selectedSection,
@@ -246,6 +287,8 @@ class _DashboardShell extends StatelessWidget {
     required this.onToggleSidebar,
     required this.statusBar,
     required this.child,
+    this.isMobile = false,
+    this.menuAnimation,
   });
 
   final _DashboardSection selectedSection;
@@ -254,28 +297,93 @@ class _DashboardShell extends StatelessWidget {
   final VoidCallback onToggleSidebar;
   final Widget statusBar;
   final Widget child;
+  final bool isMobile;
+  final Animation<double>? menuAnimation;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 535, minHeight: 500),
+          constraints: BoxConstraints(
+            minWidth: isMobile ? 0 : 535,
+            minHeight: isMobile ? 0 : 500,
+          ),
           child: Column(
             children: <Widget>[
               statusBar,
               Expanded(
-                child: Row(
-                  children: <Widget>[
-                    _NavigationSidebar(
-                      selectedSection: selectedSection,
-                      expanded: sidebarExpanded,
-                      onSectionSelected: onSectionSelected,
-                      onToggle: onToggleSidebar,
-                    ),
-                    Expanded(child: child),
-                  ],
-                ),
+                child: isMobile
+                    ? Stack(
+                        children: <Widget>[
+                          Positioned.fill(child: child),
+                          if (menuAnimation != null)
+                            Positioned.fill(
+                              child: AnimatedBuilder(
+                                animation: menuAnimation!,
+                                builder: (context, _) {
+                                  if (menuAnimation!.value == 0.0) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return GestureDetector(
+                                    onTap: onToggleSidebar,
+                                    behavior: HitTestBehavior.opaque,
+                                    child: Container(
+                                      color: Colors.black.withOpacity(
+                                        0.35 * menuAnimation!.value,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          if (menuAnimation != null)
+                            Positioned(
+                              left: 0,
+                              top: 0,
+                              bottom: 0,
+                              width: 250,
+                              child: AnimatedBuilder(
+                                animation: menuAnimation!,
+                                builder: (context, sidebarWidget) {
+                                  if (menuAnimation!.value == 0.0) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return FractionalTranslation(
+                                    translation: Offset(
+                                      menuAnimation!.value - 1.0,
+                                      0,
+                                    ),
+                                    child: sidebarWidget,
+                                  );
+                                },
+                                child: Material(
+                                  elevation: 8,
+                                  shadowColor: Colors.black45,
+                                  child: _NavigationSidebar(
+                                    selectedSection: selectedSection,
+                                    expanded: true,
+                                    isMobile: true,
+                                    onSectionSelected: onSectionSelected,
+                                    onToggle: onToggleSidebar,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      )
+                    : Row(
+                        children: <Widget>[
+                          _NavigationSidebar(
+                            selectedSection: selectedSection,
+                            expanded: sidebarExpanded,
+                            isMobile: false,
+                            onSectionSelected: onSectionSelected,
+                            onToggle: onToggleSidebar,
+                          ),
+                          Expanded(child: child),
+                        ],
+                      ),
               ),
             ],
           ),
@@ -291,12 +399,14 @@ class _NavigationSidebar extends StatelessWidget {
     required this.expanded,
     required this.onSectionSelected,
     required this.onToggle,
+    this.isMobile = false,
   });
 
   final _DashboardSection selectedSection;
   final bool expanded;
   final ValueChanged<_DashboardSection> onSectionSelected;
   final VoidCallback onToggle;
+  final bool isMobile;
 
   static const _items = <(_DashboardSection, String, IconData)>[
     (_DashboardSection.status, 'Status', CupertinoIcons.info),
@@ -312,7 +422,7 @@ class _NavigationSidebar extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
-      width: expanded ? 248 : 76,
+      width: isMobile ? 250 : (expanded ? 248 : 76),
       clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         color: colors.surface,
@@ -325,20 +435,21 @@ class _NavigationSidebar extends StatelessWidget {
       child: Column(
         children: <Widget>[
           const SizedBox(height: 8),
-          _NavigationItem(
-            icon: CupertinoIcons.bars,
-            label: '',
-            selected: false,
-            expanded: expanded,
-            onTap: onToggle,
-            tooltip: expanded ? 'Collapse navigation' : 'Expand navigation',
-          ),
+          if (!isMobile)
+            _NavigationItem(
+              icon: CupertinoIcons.bars,
+              label: '',
+              selected: false,
+              expanded: expanded,
+              onTap: onToggle,
+              tooltip: expanded ? 'Collapse navigation' : 'Expand navigation',
+            ),
           for (final item in _items)
             _NavigationItem(
               icon: item.$3,
               label: item.$2,
               selected: selectedSection == item.$1,
-              expanded: expanded,
+              expanded: isMobile ? true : expanded,
               onTap: () => onSectionSelected(item.$1),
             ),
           const Spacer(),
@@ -346,7 +457,7 @@ class _NavigationSidebar extends StatelessWidget {
             icon: CupertinoIcons.settings,
             label: 'Settings',
             selected: selectedSection == _DashboardSection.settings,
-            expanded: expanded,
+            expanded: isMobile ? true : expanded,
             onTap: () => onSectionSelected(_DashboardSection.settings),
           ),
           const SizedBox(height: 8),
@@ -1765,6 +1876,9 @@ class _StatusBar extends StatelessWidget {
     required this.metrics,
     required this.lastUpdated,
     required this.onRefresh,
+    this.isMobile = false,
+    this.onToggleSidebar,
+    this.menuAnimation,
   });
 
   final String host;
@@ -1772,6 +1886,9 @@ class _StatusBar extends StatelessWidget {
   final List<RouterMetric> metrics;
   final DateTime? lastUpdated;
   final VoidCallback onRefresh;
+  final bool isMobile;
+  final VoidCallback? onToggleSidebar;
+  final Animation<double>? menuAnimation;
 
   @override
   Widget build(BuildContext context) {
@@ -1796,7 +1913,8 @@ class _StatusBar extends StatelessWidget {
     final signalBars = _calculateSignalBars(primaryRsrp);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
+      padding: EdgeInsets.fromLTRB(
+          isMobile ? 12 : 24, 12, isMobile ? 12 : 20, 12),
       decoration: BoxDecoration(
         color: colors.surface,
         border: Border(
@@ -1807,6 +1925,36 @@ class _StatusBar extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
+          if (isMobile) ...<Widget>[
+            IconButton(
+              tooltip: (menuAnimation?.value ?? 0) > 0.5
+                  ? 'Close navigation'
+                  : 'Open navigation',
+              onPressed: onToggleSidebar,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              style: IconButton.styleFrom(
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                padding: const EdgeInsets.all(4),
+                backgroundColor:
+                    colors.surfaceContainerHighest.withOpacity(0.6),
+                hoverColor: colors.primary.withOpacity(0.1),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  side: BorderSide(
+                    color: colors.outlineVariant.withOpacity(0.3),
+                  ),
+                ),
+              ),
+              icon: AnimatedIcon(
+                icon: AnimatedIcons.menu_close,
+                progress: menuAnimation ?? const AlwaysStoppedAnimation(0.0),
+                size: 20,
+                color: colors.onSurface,
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
           Expanded(
             child: Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
