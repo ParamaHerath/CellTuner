@@ -243,6 +243,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
             menuAnimation: _mobileMenuAnimation,
           ),
           child: _DashboardContent(
+            isMobile: isMobile,
             snapshot: data,
             host: _host,
             refreshIntervalSeconds: _refreshIntervalSeconds,
@@ -578,6 +579,7 @@ class _DashboardContent extends StatelessWidget {
     required this.onSplitCellIdChanged,
     required this.onSelectedSignalMetricsChanged,
     required this.onSignalTechModeChanged,
+    this.isMobile = false,
   });
 
   final RouterSnapshot snapshot;
@@ -595,14 +597,20 @@ class _DashboardContent extends StatelessWidget {
   final ValueChanged<bool> onSplitCellIdChanged;
   final ValueChanged<Set<String>> onSelectedSignalMetricsChanged;
   final ValueChanged<String> onSignalTechModeChanged;
+  final bool isMobile;
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 16 : 32,
+        vertical: isMobile ? 18 : 28,
+      ),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1120),
+          constraints: BoxConstraints(
+            maxWidth: isMobile ? double.infinity : 1560,
+          ),
           child: Column(
             children: <Widget>[
               _SectionPage(
@@ -2327,8 +2335,9 @@ class _SignalTable extends StatelessWidget {
                 _TableCell('5G NR', header: true),
               ],
             ),
-            for (final metric in metrics) ...<TableRow>[
+            for (var idx = 0; idx < metrics.length; idx++) ...<TableRow>[
               () {
+                final metric = metrics[idx];
                 final isCellId = metric.label.toLowerCase() == 'cell id';
                 var lteVal = metric.valueFor(CellularLayer.lte);
                 var nr5gVal = metric.valueFor(CellularLayer.nr5g);
@@ -2342,6 +2351,9 @@ class _SignalTable extends StatelessWidget {
                 }
                 return TableRow(
                   decoration: BoxDecoration(
+                    color: idx.isEven
+                        ? Colors.transparent
+                        : colors.surfaceContainerHighest.withOpacity(0.2),
                     border: Border(
                       bottom: BorderSide(
                         color: colors.outlineVariant.withOpacity(0.2),
