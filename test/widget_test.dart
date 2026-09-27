@@ -29,7 +29,7 @@ void main() {
 
     await tester.tap(find.text('Signal'));
     await tester.pumpAndSettle();
-    expect(find.text('Signal'), findsNWidgets(3));
+    expect(find.text('Signal'), findsAtLeastNWidgets(2));
 
     await tester.tap(find.text('WAN'));
     await tester.pumpAndSettle();

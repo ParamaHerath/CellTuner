@@ -56,6 +56,9 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
   DateTime? _lastUpdated;
   _DashboardSection _selectedSection = _DashboardSection.status;
   bool _sidebarExpanded = true;
+  final List<SignalMetricSample> _signalHistory = <SignalMetricSample>[];
+  Set<String> _selectedSignalMetrics = <String>{'RSSI', 'RSRP', 'RSRQ', 'SINR'};
+  String _signalTechMode = 'Both (4G & 5G)';
 
   RouterSnapshotLoader get _loader =>
       widget.snapshotLoader ?? _client!.fetchSnapshot;
@@ -92,9 +95,41 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
     if (mounted) {
       setState(() {
         _lastUpdated = DateTime.now();
+        _recordSignalSnapshot(snapshot);
       });
     }
     return snapshot;
+  }
+
+  void _recordSignalSnapshot(RouterSnapshot snapshot) {
+    final now = DateTime.now();
+    final cutoff = now.subtract(const Duration(seconds: 32));
+
+    double? findVal(String key, CellularLayer layer) {
+      for (final m in snapshot.metrics) {
+        if (m.label.toUpperCase() == key) {
+          final raw = m.valueFor(layer);
+          if (raw == '-') return null;
+          final match = RegExp(r'(-?\d+(?:\.\d+)?)').firstMatch(raw);
+          if (match != null) return double.tryParse(match.group(1)!);
+        }
+      }
+      return null;
+    }
+
+    _signalHistory.add(SignalMetricSample(
+      timestamp: now,
+      rssiLte: findVal('RSSI', CellularLayer.lte),
+      rssiNr5g: findVal('RSSI', CellularLayer.nr5g),
+      rsrpLte: findVal('RSRP', CellularLayer.lte),
+      rsrpNr5g: findVal('RSRP', CellularLayer.nr5g),
+      rsrqLte: findVal('RSRQ', CellularLayer.lte),
+      rsrqNr5g: findVal('RSRQ', CellularLayer.nr5g),
+      sinrLte: findVal('SINR', CellularLayer.lte),
+      sinrNr5g: findVal('SINR', CellularLayer.nr5g),
+    ));
+
+    _signalHistory.removeWhere((s) => s.timestamp.isBefore(cutoff));
   }
 
   void _refresh() {
@@ -179,12 +214,21 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
             host: _host,
             refreshIntervalSeconds: _refreshIntervalSeconds,
             splitCellId: _splitCellId,
+            signalHistory: _signalHistory,
+            selectedSignalMetrics: _selectedSignalMetrics,
+            signalTechMode: _signalTechMode,
             lastUpdated: _lastUpdated,
             section: _selectedSection,
             onRefresh: _refresh,
             onHostChanged: _updateHost,
             onRefreshIntervalChanged: _updateRefreshInterval,
             onSplitCellIdChanged: _updateSplitCellId,
+            onSelectedSignalMetricsChanged: (metrics) {
+              setState(() => _selectedSignalMetrics = metrics);
+            },
+            onSignalTechModeChanged: (mode) {
+              setState(() => _signalTechMode = mode);
+            },
           ),
         );
       },
@@ -215,23 +259,26 @@ class _DashboardShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            statusBar,
-            Expanded(
-              child: Row(
-                children: <Widget>[
-                  _NavigationSidebar(
-                    selectedSection: selectedSection,
-                    expanded: sidebarExpanded,
-                    onSectionSelected: onSectionSelected,
-                    onToggle: onToggleSidebar,
-                  ),
-                  Expanded(child: child),
-                ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 535, minHeight: 500),
+          child: Column(
+            children: <Widget>[
+              statusBar,
+              Expanded(
+                child: Row(
+                  children: <Widget>[
+                    _NavigationSidebar(
+                      selectedSection: selectedSection,
+                      expanded: sidebarExpanded,
+                      onSectionSelected: onSectionSelected,
+                      onToggle: onToggleSidebar,
+                    ),
+                    Expanded(child: child),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -266,6 +313,7 @@ class _NavigationSidebar extends StatelessWidget {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       width: expanded ? 248 : 76,
+      clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         color: colors.surface,
         border: Border(
@@ -343,36 +391,56 @@ class _NavigationItem extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             height: 48,
-            padding: EdgeInsets.symmetric(horizontal: expanded ? 14 : 12),
             decoration: BoxDecoration(
               color: selected ? activeBg : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
-              mainAxisAlignment:
-                  expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
               children: <Widget>[
-                Icon(
-                  icon,
-                  size: 22,
-                  color: selected ? activeFg : inactiveFg,
+                const SizedBox(width: 4),
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: Center(
+                    child: Icon(
+                      icon,
+                      size: 22,
+                      color: selected ? activeFg : inactiveFg,
+                    ),
+                  ),
                 ),
-                if (expanded && label.isNotEmpty) ...<Widget>[
-                  const SizedBox(width: 14),
-                  Flexible(
-                    child: Text(
-                      label,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: selected ? activeFg : colors.onSurface,
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w500,
-                        letterSpacing: -0.1,
+                if (label.isNotEmpty)
+                  Expanded(
+                    child: ClipRect(
+                      child: OverflowBox(
+                        alignment: Alignment.centerLeft,
+                        minWidth: 0,
+                        maxWidth: 160,
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 180),
+                          opacity: expanded ? 1.0 : 0.0,
+                          curve: Curves.easeInOut,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 6, right: 12),
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.clip,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: selected ? activeFg : colors.onSurface,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                letterSpacing: -0.1,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ],
               ],
             ),
           ),
@@ -382,30 +450,41 @@ class _NavigationItem extends StatelessWidget {
   }
 }
 
+
 class _DashboardContent extends StatelessWidget {
   const _DashboardContent({
     required this.snapshot,
     required this.host,
     required this.refreshIntervalSeconds,
     required this.splitCellId,
+    required this.signalHistory,
+    required this.selectedSignalMetrics,
+    required this.signalTechMode,
     required this.lastUpdated,
     required this.section,
     required this.onRefresh,
     required this.onHostChanged,
     required this.onRefreshIntervalChanged,
     required this.onSplitCellIdChanged,
+    required this.onSelectedSignalMetricsChanged,
+    required this.onSignalTechModeChanged,
   });
 
   final RouterSnapshot snapshot;
   final String host;
   final double refreshIntervalSeconds;
   final bool splitCellId;
+  final List<SignalMetricSample> signalHistory;
+  final Set<String> selectedSignalMetrics;
+  final String signalTechMode;
   final DateTime? lastUpdated;
   final _DashboardSection section;
   final VoidCallback onRefresh;
   final ValueChanged<String> onHostChanged;
   final ValueChanged<double> onRefreshIntervalChanged;
   final ValueChanged<bool> onSplitCellIdChanged;
+  final ValueChanged<Set<String>> onSelectedSignalMetricsChanged;
+  final ValueChanged<String> onSignalTechModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -422,9 +501,14 @@ class _DashboardContent extends StatelessWidget {
                 host: host,
                 refreshIntervalSeconds: refreshIntervalSeconds,
                 splitCellId: splitCellId,
+                signalHistory: signalHistory,
+                selectedSignalMetrics: selectedSignalMetrics,
+                signalTechMode: signalTechMode,
                 onHostChanged: onHostChanged,
                 onRefreshIntervalChanged: onRefreshIntervalChanged,
                 onSplitCellIdChanged: onSplitCellIdChanged,
+                onSelectedSignalMetricsChanged: onSelectedSignalMetricsChanged,
+                onSignalTechModeChanged: onSignalTechModeChanged,
               ),
               const SizedBox(height: 40),
               Text(
@@ -451,9 +535,14 @@ class _SectionPage extends StatelessWidget {
     required this.host,
     required this.refreshIntervalSeconds,
     required this.splitCellId,
+    required this.signalHistory,
+    required this.selectedSignalMetrics,
+    required this.signalTechMode,
     required this.onHostChanged,
     required this.onRefreshIntervalChanged,
     required this.onSplitCellIdChanged,
+    required this.onSelectedSignalMetricsChanged,
+    required this.onSignalTechModeChanged,
   });
 
   final _DashboardSection section;
@@ -461,9 +550,14 @@ class _SectionPage extends StatelessWidget {
   final String host;
   final double refreshIntervalSeconds;
   final bool splitCellId;
+  final List<SignalMetricSample> signalHistory;
+  final Set<String> selectedSignalMetrics;
+  final String signalTechMode;
   final ValueChanged<String> onHostChanged;
   final ValueChanged<double> onRefreshIntervalChanged;
   final ValueChanged<bool> onSplitCellIdChanged;
+  final ValueChanged<Set<String>> onSelectedSignalMetricsChanged;
+  final ValueChanged<String> onSignalTechModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -481,7 +575,31 @@ class _SectionPage extends StatelessWidget {
           title: 'Signal',
           subtitle: 'Signal tuning and spectrum analysis',
           icon: CupertinoIcons.waveform_path_ecg,
-          child: const _SignalPlaceholder(),
+          headerActions: Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[
+              _CellIdBadge(
+                snapshot: snapshot,
+                splitCellId: splitCellId,
+              ),
+              _MetricsDropdown(
+                selectedMetrics: selectedSignalMetrics,
+                onChanged: onSelectedSignalMetricsChanged,
+              ),
+              _TechModeDropdown(
+                mode: signalTechMode,
+                onChanged: onSignalTechModeChanged,
+              ),
+            ],
+          ),
+          child: _SignalPage(
+            history: signalHistory,
+            snapshot: snapshot,
+            selectedMetrics: selectedSignalMetrics,
+            techMode: signalTechMode,
+          ),
         ),
       _DashboardSection.wan => _PagePanel(
           title: 'WAN',
@@ -524,12 +642,14 @@ class _PagePanel extends StatelessWidget {
     required this.subtitle,
     required this.icon,
     required this.child,
+    this.headerActions,
   });
 
   final String title;
   final String subtitle;
   final IconData icon;
   final Widget child;
+  final Widget? headerActions;
 
   @override
   Widget build(BuildContext context) {
@@ -537,39 +657,91 @@ class _PagePanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Row(
-          children: <Widget>[
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: colors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, size: 24, color: colors.primary),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 640;
+            if (isNarrow && headerActions != null) {
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.3,
+                  Row(
+                    children: <Widget>[
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: colors.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
                         ),
+                        child: Icon(icon, size: 24, color: colors.primary),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              title,
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.3,
+                                  ),
+                            ),
+                            Text(
+                              subtitle,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: colors.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
+                  const SizedBox(height: 12),
+                  headerActions!,
                 ],
-              ),
-            ),
-          ],
+              );
+            }
+            return Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, size: 24, color: colors.primary),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                            ),
+                      ),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (headerActions != null) ...<Widget>[
+                  const SizedBox(width: 12),
+                  headerActions!,
+                ],
+              ],
+            );
+          },
         ),
         const SizedBox(height: 24),
         child,
@@ -578,27 +750,693 @@ class _PagePanel extends StatelessWidget {
   }
 }
 
-class _SignalPlaceholder extends StatelessWidget {
-  const _SignalPlaceholder();
+class _CellIdBadge extends StatelessWidget {
+  const _CellIdBadge({
+    required this.snapshot,
+    required this.splitCellId,
+  });
+
+  final RouterSnapshot snapshot;
+  final bool splitCellId;
+
+  String _formattedCellId() {
+    RouterMetric? cellIdMetric;
+    for (final m in snapshot.metrics) {
+      if (m.label.toLowerCase() == 'cell id') {
+        cellIdMetric = m;
+        break;
+      }
+    }
+    if (cellIdMetric == null) return 'Cell ID: N/A';
+
+    var lteVal = cellIdMetric.valueFor(CellularLayer.lte);
+    var nr5gVal = cellIdMetric.valueFor(CellularLayer.nr5g);
+
+    if (splitCellId) {
+      if (lteVal != '-') lteVal = _formatCellIdString(lteVal, is5g: false);
+      if (nr5gVal != '-') nr5gVal = _formatCellIdString(nr5gVal, is5g: true);
+    }
+
+    if (lteVal != '-' && nr5gVal != '-' && lteVal != nr5gVal) {
+      return 'Cell ID: $lteVal / $nr5gVal';
+    } else if (lteVal != '-') {
+      return 'Cell ID: $lteVal';
+    } else if (nr5gVal != '-') {
+      return 'Cell ID: $nr5gVal';
+    }
+    return 'Cell ID: N/A';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(48),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
-        ),
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
       ),
-      child: const Center(
-        child: Text(
-          'Signal',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(CupertinoIcons.number, size: 14, color: colors.primary),
+          const SizedBox(width: 8),
+          SelectableText(
+            _formattedCellId(),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: colors.onSurface,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricsDropdown extends StatelessWidget {
+  const _MetricsDropdown({
+    required this.selectedMetrics,
+    required this.onChanged,
+  });
+
+  final Set<String> selectedMetrics;
+  final ValueChanged<Set<String>> onChanged;
+
+  String _formatLabel() {
+    if (selectedMetrics.length == 4) return 'Metrics: All (4/4)';
+    if (selectedMetrics.isEmpty) return 'Metrics: None (0/4)';
+    final sorted = ['RSSI', 'RSRP', 'RSRQ', 'SINR'].where(selectedMetrics.contains).toList();
+    return 'Metrics: ${sorted.join(", ")}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return PopupMenuButton<String>(
+      tooltip: 'Select metrics',
+      onSelected: (metricKey) {
+        final updated = Set<String>.from(selectedMetrics);
+        if (updated.contains(metricKey)) {
+          updated.remove(metricKey);
+        } else {
+          updated.add(metricKey);
+        }
+        onChanged(updated);
+      },
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        for (final m in <String>['RSSI', 'RSRP', 'RSRQ', 'SINR'])
+          CheckedPopupMenuItem<String>(
+            value: m,
+            checked: selectedMetrics.contains(m),
+            child: Text(m, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(CupertinoIcons.slider_horizontal_3, size: 14, color: colors.primary),
+            const SizedBox(width: 8),
+            Text(
+              _formatLabel(),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: colors.onSurface,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(CupertinoIcons.chevron_down, size: 13, color: colors.onSurfaceVariant),
+          ],
         ),
       ),
     );
+  }
+}
+
+class _TechModeDropdown extends StatelessWidget {
+  const _TechModeDropdown({
+    required this.mode,
+    required this.onChanged,
+  });
+
+  final String mode;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: mode,
+          isDense: true,
+          icon: const Icon(CupertinoIcons.chevron_down, size: 13),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: colors.onSurface,
+          ),
+          items: const [
+            DropdownMenuItem(
+              value: 'Both (4G & 5G)',
+              child: Text('Both (4G & 5G)'),
+            ),
+            DropdownMenuItem(
+              value: '4G LTE Only',
+              child: Text('4G LTE Only'),
+            ),
+            DropdownMenuItem(
+              value: '5G NR Only',
+              child: Text('5G NR Only'),
+            ),
+          ],
+          onChanged: (val) {
+            if (val != null) onChanged(val);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class SignalMetricSample {
+  const SignalMetricSample({
+    required this.timestamp,
+    required this.rssiLte,
+    required this.rssiNr5g,
+    required this.rsrpLte,
+    required this.rsrpNr5g,
+    required this.rsrqLte,
+    required this.rsrqNr5g,
+    required this.sinrLte,
+    required this.sinrNr5g,
+  });
+
+  final DateTime timestamp;
+  final double? rssiLte;
+  final double? rssiNr5g;
+  final double? rsrpLte;
+  final double? rsrpNr5g;
+  final double? rsrqLte;
+  final double? rsrqNr5g;
+  final double? sinrLte;
+  final double? sinrNr5g;
+
+  double? getValue(String key, {required bool is5g}) {
+    return switch (key.toUpperCase()) {
+      'RSSI' => is5g ? rssiNr5g : rssiLte,
+      'RSRP' => is5g ? rsrpNr5g : rsrpLte,
+      'RSRQ' => is5g ? rsrqNr5g : rsrqLte,
+      'SINR' => is5g ? sinrNr5g : sinrLte,
+      _ => null,
+    };
+  }
+}
+
+class _SignalPage extends StatelessWidget {
+  const _SignalPage({
+    required this.history,
+    required this.snapshot,
+    this.selectedMetrics,
+    this.techMode,
+  });
+
+  final List<SignalMetricSample> history;
+  final RouterSnapshot snapshot;
+  final Set<String>? selectedMetrics;
+  final String? techMode;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeMetrics = selectedMetrics ?? {'RSSI', 'RSRP', 'RSRQ', 'SINR'};
+    final mode = techMode ?? 'Both (4G & 5G)';
+    final show4g = mode == 'Both (4G & 5G)' || mode == '4G LTE Only';
+    final show5g = mode == 'Both (4G & 5G)' || mode == '5G NR Only';
+
+    const metricConfigs = <(String, String, String)>[
+      ('RSSI', 'RSSI (Received Signal Strength)', 'dBm'),
+      ('RSRP', 'RSRP (Reference Signal Received Power)', 'dBm'),
+      ('RSRQ', 'RSRQ (Reference Signal Received Quality)', 'dB'),
+      ('SINR', 'SINR (Signal to Interference & Noise)', 'dB'),
+    ];
+
+    final visibleConfigs = metricConfigs
+        .where((c) => activeMetrics.contains(c.$1))
+        .toList();
+
+    if (visibleConfigs.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(40),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
+          ),
+        ),
+        child: const Center(
+          child: Text(
+            'No metrics selected. Select metrics to display graphs.',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useTwoColumns = constraints.maxWidth > 800;
+
+        if (useTwoColumns) {
+          final rows = <Widget>[];
+          for (var i = 0; i < visibleConfigs.length; i += 2) {
+            final first = visibleConfigs[i];
+            final second = (i + 1 < visibleConfigs.length) ? visibleConfigs[i + 1] : null;
+
+            rows.add(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                    child: _MetricGraphCard(
+                      metricKey: first.$1,
+                      title: first.$2,
+                      unit: first.$3,
+                      history: history,
+                      show4g: show4g,
+                      show5g: show5g,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: second != null
+                        ? _MetricGraphCard(
+                            metricKey: second.$1,
+                            title: second.$2,
+                            unit: second.$3,
+                            history: history,
+                            show4g: show4g,
+                            show5g: show5g,
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ],
+              ),
+            );
+            if (i + 2 < visibleConfigs.length) {
+              rows.add(const SizedBox(height: 16));
+            }
+          }
+          return Column(children: rows);
+        } else {
+          return Column(
+            children: [
+              for (var i = 0; i < visibleConfigs.length; i++) ...[
+                _MetricGraphCard(
+                  metricKey: visibleConfigs[i].$1,
+                  title: visibleConfigs[i].$2,
+                  unit: visibleConfigs[i].$3,
+                  history: history,
+                  show4g: show4g,
+                  show5g: show5g,
+                ),
+                if (i < visibleConfigs.length - 1) const SizedBox(height: 16),
+              ],
+            ],
+          );
+        }
+      },
+    );
+  }
+}
+
+class _MetricGraphCard extends StatelessWidget {
+  const _MetricGraphCard({
+    required this.title,
+    required this.metricKey,
+    required this.unit,
+    required this.history,
+    required this.show4g,
+    required this.show5g,
+  });
+
+  final String title;
+  final String metricKey;
+  final String unit;
+  final List<SignalMetricSample> history;
+  final bool show4g;
+  final bool show5g;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final latest = history.isNotEmpty ? history.last : null;
+    final lteVal = latest?.getValue(metricKey, is5g: false);
+    final nr5gVal = latest?.getValue(metricKey, is5g: true);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                Flexible(
+                  child: Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (show4g) ...<Widget>[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD1FAE5),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Text(
+                          '4G: ${lteVal != null ? "${lteVal.toStringAsFixed(0)}$unit" : "N/A"}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF00A83B),
+                          ),
+                        ),
+                      ),
+                      if (show5g) const SizedBox(width: 6),
+                    ],
+                    if (show5g) ...<Widget>[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE0E7FF),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Text(
+                          '5G: ${nr5gVal != null ? "${nr5gVal.toStringAsFixed(0)}$unit" : "N/A"}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF003BFF),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 240,
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _MetricLineChartPainter(
+                  metricKey: metricKey,
+                  unit: unit,
+                  history: history,
+                  show4g: show4g,
+                  show5g: show5g,
+                  gridColor: colors.outlineVariant.withOpacity(0.3),
+                  labelColor: colors.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetricLineChartPainter extends CustomPainter {
+  _MetricLineChartPainter({
+    required this.metricKey,
+    required this.unit,
+    required this.history,
+    required this.show4g,
+    required this.show5g,
+    required this.gridColor,
+    required this.labelColor,
+  });
+
+  final String metricKey;
+  final String unit;
+  final List<SignalMetricSample> history;
+  final bool show4g;
+  final bool show5g;
+  final Color gridColor;
+  final Color labelColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const chartLeft = 42.0;
+    final chartRight = size.width - 15.0;
+    const chartTop = 15.0;
+    final chartBottom = size.height - 25.0;
+    final chartWidth = chartRight - chartLeft;
+    final chartHeight = chartBottom - chartTop;
+
+    if (chartWidth <= 0 || chartHeight <= 0) return;
+
+    final now = history.isNotEmpty ? history.last.timestamp : DateTime.now();
+
+    var pointsSource = history;
+    if (pointsSource.length == 1) {
+      final single = pointsSource.first;
+      pointsSource = [
+        SignalMetricSample(
+          timestamp: now.subtract(const Duration(seconds: 30)),
+          rssiLte: single.rssiLte,
+          rssiNr5g: single.rssiNr5g,
+          rsrpLte: single.rsrpLte,
+          rsrpNr5g: single.rsrpNr5g,
+          rsrqLte: single.rsrqLte,
+          rsrqNr5g: single.rsrqNr5g,
+          sinrLte: single.sinrLte,
+          sinrNr5g: single.sinrNr5g,
+        ),
+        single,
+      ];
+    }
+
+    double defaultMin;
+    double defaultMax;
+    switch (metricKey.toUpperCase()) {
+      case 'RSSI':
+        defaultMin = -110;
+        defaultMax = -40;
+        break;
+      case 'RSRP':
+        defaultMin = -130;
+        defaultMax = -60;
+        break;
+      case 'RSRQ':
+        defaultMin = -24;
+        defaultMax = 0;
+        break;
+      case 'SINR':
+        defaultMin = -10;
+        defaultMax = 30;
+        break;
+      default:
+        defaultMin = -100;
+        defaultMax = 0;
+    }
+
+    double minY = defaultMin;
+    double maxY = defaultMax;
+
+    final allVals = <double>[];
+    for (final s in pointsSource) {
+      if (show4g) {
+        final v = s.getValue(metricKey, is5g: false);
+        if (v != null) allVals.add(v);
+      }
+      if (show5g) {
+        final v = s.getValue(metricKey, is5g: true);
+        if (v != null) allVals.add(v);
+      }
+    }
+
+    if (allVals.isNotEmpty) {
+      final sampleMin = allVals.reduce((a, b) => a < b ? a : b);
+      final sampleMax = allVals.reduce((a, b) => a > b ? a : b);
+      if (sampleMin < minY) minY = (sampleMin - 5).floorToDouble();
+      if (sampleMax > maxY) maxY = (sampleMax + 5).ceilToDouble();
+    }
+
+    if (minY == maxY) {
+      minY -= 5;
+      maxY += 5;
+    }
+
+    final gridPaint = Paint()
+      ..color = gridColor
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
+
+    const numYDivisions = 3;
+    for (var i = 0; i <= numYDivisions; i++) {
+      final yRatio = i / numYDivisions;
+      final y = chartBottom - (yRatio * chartHeight);
+      canvas.drawLine(Offset(chartLeft, y), Offset(chartRight, y), gridPaint);
+
+      final val = minY + (yRatio * (maxY - minY));
+      final textSpan = TextSpan(
+        text: val.round().toString(),
+        style: TextStyle(fontSize: 10, color: labelColor),
+      );
+      final tp = TextPainter(
+        text: textSpan,
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(chartLeft - tp.width - 6, y - (tp.height / 2)));
+    }
+
+    final xLabels = <(double, String)>[
+      (0.0, '-30s'),
+      (0.333, '-20s'),
+      (0.666, '-10s'),
+      (1.0, 'Now'),
+    ];
+
+    for (final (ratio, label) in xLabels) {
+      final x = chartLeft + (ratio * chartWidth);
+      canvas.drawLine(Offset(x, chartTop), Offset(x, chartBottom), gridPaint);
+
+      final textSpan = TextSpan(
+        text: label,
+        style: TextStyle(fontSize: 10, color: labelColor, fontWeight: FontWeight.w500),
+      );
+      final tp = TextPainter(
+        text: textSpan,
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final textX = (x - (tp.width / 2)).clamp(chartLeft, chartRight - tp.width);
+      tp.paint(canvas, Offset(textX, chartBottom + 6));
+    }
+
+    void drawSeries(bool is5g, Color color) {
+      final points = <Offset>[];
+      for (final sample in pointsSource) {
+        final val = sample.getValue(metricKey, is5g: is5g);
+        if (val == null) continue;
+        final age = now.difference(sample.timestamp).inMilliseconds / 1000.0;
+        final x = chartRight - ((age / 30.0) * chartWidth);
+        final clampedX = x.clamp(chartLeft, chartRight);
+        final yRatio = (val - minY) / (maxY - minY);
+        final y = chartBottom - (yRatio * chartHeight);
+        final clampedY = y.clamp(chartTop, chartBottom);
+        points.add(Offset(clampedX, clampedY));
+      }
+
+      if (points.isEmpty) return;
+
+      if (points.length == 1) {
+        final p = points.first;
+        points.insert(0, Offset(chartLeft, p.dy));
+      }
+
+      final linePath = Path();
+      final fillPath = Path();
+
+      linePath.moveTo(points.first.dx, points.first.dy);
+      fillPath.moveTo(points.first.dx, chartBottom);
+      fillPath.lineTo(points.first.dx, points.first.dy);
+
+      for (var i = 0; i < points.length - 1; i++) {
+        final p0 = points[i];
+        final p1 = points[i + 1];
+        final controlX1 = p0.dx + (p1.dx - p0.dx) / 2;
+        final controlY1 = p0.dy;
+        final controlX2 = p0.dx + (p1.dx - p0.dx) / 2;
+        final controlY2 = p1.dy;
+        linePath.cubicTo(controlX1, controlY1, controlX2, controlY2, p1.dx, p1.dy);
+        fillPath.cubicTo(controlX1, controlY1, controlX2, controlY2, p1.dx, p1.dy);
+      }
+
+      fillPath.lineTo(points.last.dx, chartBottom);
+      fillPath.close();
+
+      final fillPaint = Paint()
+        ..style = PaintingStyle.fill
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            color.withOpacity(0.18),
+            color.withOpacity(0.0),
+          ],
+        ).createShader(Rect.fromLTRB(chartLeft, chartTop, chartRight, chartBottom));
+
+      canvas.drawPath(fillPath, fillPaint);
+
+      final linePaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..color = color
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+
+      canvas.drawPath(linePath, linePaint);
+
+      final lastPoint = points.last;
+      final outerDot = Paint()..color = color;
+      final innerDot = Paint()..color = Colors.white;
+
+      canvas.drawCircle(lastPoint, 4.5, outerDot);
+      canvas.drawCircle(lastPoint, 2.0, innerDot);
+    }
+
+    if (show4g) drawSeries(false, const Color(0xFF00A83B));
+    if (show5g) drawSeries(true, const Color(0xFF003BFF));
+  }
+
+  @override
+  bool shouldRepaint(covariant _MetricLineChartPainter oldDelegate) {
+    return oldDelegate.history != history ||
+        oldDelegate.show4g != show4g ||
+        oldDelegate.show5g != show5g ||
+        oldDelegate.metricKey != metricKey;
   }
 }
 
