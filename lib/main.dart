@@ -1851,35 +1851,46 @@ class _StatusBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          if (lastUpdated != null) ...<Widget>[
-            Text(
-              'Last Synced: ${_formatClock(lastUpdated!)}',
-              style: TextStyle(
-                fontSize: 10,
-                color: colors.outline,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(width: 12),
-          ],
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: onRefresh,
-            style: IconButton.styleFrom(
-              backgroundColor: colors.surfaceContainerHighest.withOpacity(0.6),
-              hoverColor: colors.primary.withOpacity(0.1),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-                side: BorderSide(
-                  color: colors.outlineVariant.withOpacity(0.3),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              IconButton(
+                tooltip: 'Refresh',
+                onPressed: onRefresh,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+                style: IconButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.all(3),
+                  backgroundColor:
+                      colors.surfaceContainerHighest.withOpacity(0.6),
+                  hoverColor: colors.primary.withOpacity(0.1),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(5),
+                    side: BorderSide(
+                      color: colors.outlineVariant.withOpacity(0.3),
+                    ),
+                  ),
+                ),
+                icon: Icon(
+                  CupertinoIcons.refresh,
+                  size: 13,
+                  color: colors.onSurfaceVariant,
                 ),
               ),
-            ),
-            icon: Icon(
-              CupertinoIcons.refresh,
-              size: 20,
-              color: colors.onSurfaceVariant,
-            ),
+              const SizedBox(height: 2),
+              Text(
+                lastUpdated != null
+                    ? 'Last Synced: ${_formatClock(lastUpdated!)}'
+                    : '',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: colors.outline,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ],
       ),
