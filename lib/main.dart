@@ -932,6 +932,8 @@ class _StatusBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final badgeStyle = _getNetworkBadgeStyle(networkType, colors);
+
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
       decoration: BoxDecoration(
@@ -966,8 +968,10 @@ class _StatusBar extends StatelessWidget {
                         ),
                         _StatusChip(
                           icon: Icons.cell_tower_outlined,
-                          label: networkType.isEmpty ? '-' : networkType,
-                          isAccent: networkType.isNotEmpty,
+                          label: badgeStyle.$1,
+                          backgroundColor: badgeStyle.$2,
+                          foregroundColor: badgeStyle.$3,
+                          borderColor: badgeStyle.$4,
                         ),
                       ],
                     ),
@@ -1022,35 +1026,71 @@ class _StatusBar extends StatelessWidget {
   }
 }
 
+(String, Color, Color, Color) _getNetworkBadgeStyle(
+  String rawNetworkType,
+  ColorScheme colors,
+) {
+  final upper = rawNetworkType.trim().toUpperCase();
+  if (upper.isEmpty || upper == '-' || upper == 'NONE' || upper == 'NO SERVICE') {
+    return (
+      'No Service',
+      const Color(0xFFFEE2E2),
+      const Color(0xFFDC2626),
+      const Color(0xFFFCA5A5),
+    );
+  }
+  if (upper.contains('5G')) {
+    return (
+      rawNetworkType,
+      const Color(0xFFDBEAFE),
+      const Color(0xFF2563EB),
+      const Color(0xFF93C5FD),
+    );
+  }
+  if (upper.contains('4G') || upper.contains('LTE')) {
+    return (
+      rawNetworkType,
+      const Color(0xFFDCFCE7),
+      const Color(0xFF16A34A),
+      const Color(0xFF86EFAC),
+    );
+  }
+  return (
+    rawNetworkType,
+    colors.surfaceContainerHighest.withOpacity(0.6),
+    colors.onSurfaceVariant,
+    colors.outlineVariant.withOpacity(0.3),
+  );
+}
+
 class _StatusChip extends StatelessWidget {
   const _StatusChip({
     required this.icon,
     required this.label,
-    this.isAccent = false,
+    this.backgroundColor,
+    this.foregroundColor,
+    this.borderColor,
   });
 
   final IconData icon;
   final String label;
-  final bool isAccent;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final bg = isAccent
-        ? colors.primaryContainer.withOpacity(0.4)
-        : colors.surfaceContainerHighest.withOpacity(0.6);
-    final fg = isAccent ? colors.primary : colors.onSurfaceVariant;
+    final bg = backgroundColor ?? colors.surfaceContainerHighest.withOpacity(0.6);
+    final fg = foregroundColor ?? colors.onSurfaceVariant;
+    final border = borderColor ?? colors.outlineVariant.withOpacity(0.3);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isAccent
-              ? colors.primary.withOpacity(0.2)
-              : colors.outlineVariant.withOpacity(0.3),
-        ),
+        border: Border.all(color: border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
