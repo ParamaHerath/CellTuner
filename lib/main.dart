@@ -45,9 +45,11 @@ class RouterDashboardScreen extends StatefulWidget {
 }
 
 class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
-  static const _host = '192.168.8.1';
+  String _host = '192.168.8.1';
+  double _refreshIntervalSeconds = 1.0;
+  bool _splitCellId = false;
 
-  late final RouterApiClient? _client;
+  late RouterApiClient? _client;
   late Future<RouterSnapshot> _snapshotFuture;
   Timer? _refreshTimer;
   DateTime? _lastUpdated;
@@ -64,11 +66,17 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
         widget.snapshotLoader == null ? RouterApiClient(host: _host) : null;
     _snapshotFuture = _loadSnapshot();
     if (widget.snapshotLoader == null) {
-      _refreshTimer = Timer.periodic(
-        const Duration(seconds: 10),
-        (_) => _refresh(),
-      );
+      _startRefreshTimer();
     }
+  }
+
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
+    final ms = (_refreshIntervalSeconds * 1000).round();
+    _refreshTimer = Timer.periodic(
+      Duration(milliseconds: ms),
+      (_) => _refresh(),
+    );
   }
 
   @override
@@ -91,6 +99,36 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
   void _refresh() {
     setState(() {
       _snapshotFuture = _loadSnapshot();
+    });
+  }
+
+  void _updateHost(String newHost) {
+    final trimmed = newHost.trim();
+    if (trimmed.isEmpty || trimmed == _host) return;
+    setState(() {
+      _host = trimmed;
+      if (widget.snapshotLoader == null) {
+        _client?.close();
+        _client = RouterApiClient(host: _host);
+      }
+      _refresh();
+    });
+  }
+
+  void _updateRefreshInterval(double seconds) {
+    if (seconds == _refreshIntervalSeconds) return;
+    setState(() {
+      _refreshIntervalSeconds = seconds;
+      if (widget.snapshotLoader == null) {
+        _startRefreshTimer();
+      }
+    });
+  }
+
+  void _updateSplitCellId(bool enabled) {
+    if (enabled == _splitCellId) return;
+    setState(() {
+      _splitCellId = enabled;
     });
   }
 
@@ -131,9 +169,14 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
           child: _DashboardContent(
             snapshot: data,
             host: _host,
+            refreshIntervalSeconds: _refreshIntervalSeconds,
+            splitCellId: _splitCellId,
             lastUpdated: _lastUpdated,
             section: _selectedSection,
             onRefresh: _refresh,
+            onHostChanged: _updateHost,
+            onRefreshIntervalChanged: _updateRefreshInterval,
+            onSplitCellIdChanged: _updateSplitCellId,
           ),
         );
       },
@@ -327,16 +370,26 @@ class _DashboardContent extends StatelessWidget {
   const _DashboardContent({
     required this.snapshot,
     required this.host,
+    required this.refreshIntervalSeconds,
+    required this.splitCellId,
     required this.lastUpdated,
     required this.section,
     required this.onRefresh,
+    required this.onHostChanged,
+    required this.onRefreshIntervalChanged,
+    required this.onSplitCellIdChanged,
   });
 
   final RouterSnapshot snapshot;
   final String host;
+  final double refreshIntervalSeconds;
+  final bool splitCellId;
   final DateTime? lastUpdated;
   final _DashboardSection section;
   final VoidCallback onRefresh;
+  final ValueChanged<String> onHostChanged;
+  final ValueChanged<double> onRefreshIntervalChanged;
+  final ValueChanged<bool> onSplitCellIdChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -356,7 +409,16 @@ class _DashboardContent extends StatelessWidget {
                 constraints: const BoxConstraints(maxWidth: 1120),
                 child: Column(
                   children: <Widget>[
-                    _SectionPage(section: section, snapshot: snapshot),
+                    _SectionPage(
+                      section: section,
+                      snapshot: snapshot,
+                      host: host,
+                      refreshIntervalSeconds: refreshIntervalSeconds,
+                      splitCellId: splitCellId,
+                      onHostChanged: onHostChanged,
+                      onRefreshIntervalChanged: onRefreshIntervalChanged,
+                      onSplitCellIdChanged: onSplitCellIdChanged,
+                    ),
                     const SizedBox(height: 40),
                     Text(
                       'CellTuner - v0.0.1',
@@ -379,10 +441,25 @@ class _DashboardContent extends StatelessWidget {
 }
 
 class _SectionPage extends StatelessWidget {
-  const _SectionPage({required this.section, required this.snapshot});
+  const _SectionPage({
+    required this.section,
+    required this.snapshot,
+    required this.host,
+    required this.refreshIntervalSeconds,
+    required this.splitCellId,
+    required this.onHostChanged,
+    required this.onRefreshIntervalChanged,
+    required this.onSplitCellIdChanged,
+  });
 
   final _DashboardSection section;
   final RouterSnapshot snapshot;
+  final String host;
+  final double refreshIntervalSeconds;
+  final bool splitCellId;
+  final ValueChanged<String> onHostChanged;
+  final ValueChanged<double> onRefreshIntervalChanged;
+  final ValueChanged<bool> onSplitCellIdChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -391,7 +468,10 @@ class _SectionPage extends StatelessWidget {
           title: 'Status',
           subtitle: 'Real-time network and cellular metrics',
           icon: Icons.info_outline,
-          child: _SignalTable(metrics: snapshot.metrics),
+          child: _SignalTable(
+            metrics: snapshot.metrics,
+            splitCellId: splitCellId,
+          ),
         ),
       _DashboardSection.signal => _PagePanel(
           title: 'Signal',
@@ -417,7 +497,19 @@ class _SectionPage extends StatelessWidget {
           icon: Icons.sim_card_outlined,
           child: _IdentityCard(snapshot: snapshot),
         ),
-      _DashboardSection.settings => const _SettingsPlaceholder(),
+      _DashboardSection.settings => _PagePanel(
+          title: 'Settings',
+          subtitle: 'Configure router IP and dashboard preferences',
+          icon: Icons.settings_outlined,
+          child: _SettingsCard(
+            host: host,
+            refreshIntervalSeconds: refreshIntervalSeconds,
+            splitCellId: splitCellId,
+            onHostChanged: onHostChanged,
+            onRefreshIntervalChanged: onRefreshIntervalChanged,
+            onSplitCellIdChanged: onSplitCellIdChanged,
+          ),
+        ),
     };
   }
 }
@@ -506,24 +598,318 @@ class _SignalPlaceholder extends StatelessWidget {
   }
 }
 
-class _SettingsPlaceholder extends StatelessWidget {
-  const _SettingsPlaceholder();
+class _SettingsCard extends StatefulWidget {
+  const _SettingsCard({
+    required this.host,
+    required this.refreshIntervalSeconds,
+    required this.splitCellId,
+    required this.onHostChanged,
+    required this.onRefreshIntervalChanged,
+    required this.onSplitCellIdChanged,
+  });
+
+  final String host;
+  final double refreshIntervalSeconds;
+  final bool splitCellId;
+  final ValueChanged<String> onHostChanged;
+  final ValueChanged<double> onRefreshIntervalChanged;
+  final ValueChanged<bool> onSplitCellIdChanged;
+
+  @override
+  State<_SettingsCard> createState() => _SettingsCardState();
+}
+
+class _SettingsCardState extends State<_SettingsCard> {
+  late final TextEditingController _hostController;
+
+  static const _intervalOptions = <double>[0.25, 0.5, 1.0, 2.0, 5.0, 10.0];
+
+  @override
+  void initState() {
+    super.initState();
+    _hostController = TextEditingController(text: widget.host);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SettingsCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.host != widget.host && _hostController.text != widget.host) {
+      _hostController.text = widget.host;
+    }
+  }
+
+  @override
+  void dispose() {
+    _hostController.dispose();
+    super.dispose();
+  }
+
+  void _saveHost() {
+    final newHost = _hostController.text.trim();
+    if (newHost.isNotEmpty) {
+      widget.onHostChanged(newHost);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Router IP updated to $newHost'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     return Container(
-      padding: const EdgeInsets.all(48),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
-        ),
+        border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: const Center(
-        child: Text(
-          'Settings',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.router_outlined, color: colors.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Router Connection',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Router IP Address',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: colors.onSurface,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Enter the gateway IP address of your LTE/5G router (Default: 192.168.8.1).",
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: TextField(
+                    controller: _hostController,
+                    decoration: InputDecoration(
+                      hintText: '192.168.8.1',
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: colors.outlineVariant,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: colors.outlineVariant.withOpacity(0.6),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: colors.primary,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                    onSubmitted: (_) => _saveHost(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                FilledButton(
+                  onPressed: _saveHost,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: colors.outlineVariant.withOpacity(0.3),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.timer_outlined, color: colors.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Polling & Refresh',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Update Frequency',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: colors.onSurface,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Select how often the dashboard automatically polls the router for metrics (Default: 1s).',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<double>(
+              value: widget.refreshIntervalSeconds,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: colors.outlineVariant,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: colors.outlineVariant.withOpacity(0.6),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: colors.primary,
+                    width: 1.5,
+                  ),
+                ),
+              ),
+              items: _intervalOptions.map((seconds) {
+                final label = seconds < 1 ? '${seconds}s' : '${seconds.toInt()}s';
+                return DropdownMenuItem<double>(
+                  value: seconds,
+                  child: Text(label),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  widget.onRefreshIntervalChanged(val);
+                }
+              },
+            ),
+            const SizedBox(height: 24),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: colors.outlineVariant.withOpacity(0.3),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.tune_outlined, color: colors.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Cell Identity Formatting',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Split Cell ID',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: colors.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Show LTE and 5G Cell ID as eNB/gNB ID–Sector ID.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Switch(
+                  value: widget.splitCellId,
+                  onChanged: widget.onSplitCellIdChanged,
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -572,14 +958,13 @@ class _StatusBar extends StatelessWidget {
                       'Dialog AirFibre',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w800,
-                            letterSpacing: -0.2,
                           ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Connected - $host',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 10,
                         color: colors.onSurfaceVariant,
                         fontWeight: FontWeight.w500,
                       ),
@@ -850,9 +1235,13 @@ class _SystemCard extends StatelessWidget {
 }
 
 class _SignalTable extends StatelessWidget {
-  const _SignalTable({required this.metrics});
+  const _SignalTable({
+    required this.metrics,
+    this.splitCellId = false,
+  });
 
   final List<RouterMetric> metrics;
+  final bool splitCellId;
 
   @override
   Widget build(BuildContext context) {
@@ -890,25 +1279,55 @@ class _SignalTable extends StatelessWidget {
                 _TableCell('5G NR', header: true),
               ],
             ),
-            for (final metric in metrics)
-              TableRow(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: colors.outlineVariant.withOpacity(0.2),
+            for (final metric in metrics) ...<TableRow>[
+              () {
+                final isCellId = metric.label.toLowerCase() == 'cell id';
+                var lteVal = metric.valueFor(CellularLayer.lte);
+                var nr5gVal = metric.valueFor(CellularLayer.nr5g);
+                if (splitCellId && isCellId) {
+                  if (lteVal != '-') {
+                    lteVal = _formatCellIdString(lteVal, is5g: false);
+                  }
+                  if (nr5gVal != '-') {
+                    nr5gVal = _formatCellIdString(nr5gVal, is5g: true);
+                  }
+                }
+                return TableRow(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: colors.outlineVariant.withOpacity(0.2),
+                      ),
                     ),
                   ),
-                ),
-                children: <Widget>[
-                  _TableCell(metric.label),
-                  _TableCell(metric.valueFor(CellularLayer.lte)),
-                  _TableCell(metric.valueFor(CellularLayer.nr5g)),
-                ],
-              ),
+                  children: <Widget>[
+                    _TableCell(metric.label),
+                    _TableCell(lteVal),
+                    _TableCell(nr5gVal),
+                  ],
+                );
+              }(),
+            ],
           ],
         ),
       ),
     );
+  }
+}
+
+String _formatCellIdString(String raw, {required bool is5g}) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty || trimmed == '-') return raw;
+  final val = int.tryParse(trimmed);
+  if (val == null) return raw;
+  if (!is5g) {
+    final enb = val ~/ 256;
+    final sector = val % 256;
+    return '$enb-$sector';
+  } else {
+    final gnb = val ~/ 16384;
+    final sector = val % 16384;
+    return '$gnb-$sector';
   }
 }
 
