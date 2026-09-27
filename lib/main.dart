@@ -1091,7 +1091,7 @@ class _MetricGraphCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             SizedBox(
-              height: 180,
+              height: 240,
               width: double.infinity,
               child: CustomPaint(
                 painter: _MetricLineChartPainter(
