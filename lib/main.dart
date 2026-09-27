@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'router/router_api_client.dart';
@@ -251,11 +252,11 @@ class _NavigationSidebar extends StatelessWidget {
   final VoidCallback onToggle;
 
   static const _items = <(_DashboardSection, String, IconData)>[
-    (_DashboardSection.status, 'Status', Icons.info_outline),
-    (_DashboardSection.signal, 'Signal', Icons.monitor_heart_outlined),
-    (_DashboardSection.wan, 'WAN', Icons.public_outlined),
-    (_DashboardSection.system, 'System', Icons.memory_outlined),
-    (_DashboardSection.subscriber, 'Subscriber', Icons.sim_card_outlined),
+    (_DashboardSection.status, 'Status', CupertinoIcons.info),
+    (_DashboardSection.signal, 'Signal', CupertinoIcons.waveform_path_ecg),
+    (_DashboardSection.wan, 'WAN', CupertinoIcons.globe),
+    (_DashboardSection.system, 'System', CupertinoIcons.desktopcomputer),
+    (_DashboardSection.subscriber, 'Subscriber', CupertinoIcons.person_crop_square),
   ];
 
   @override
@@ -277,7 +278,7 @@ class _NavigationSidebar extends StatelessWidget {
         children: <Widget>[
           const SizedBox(height: 8),
           _NavigationItem(
-            icon: Icons.menu_rounded,
+            icon: CupertinoIcons.bars,
             label: '',
             selected: false,
             expanded: expanded,
@@ -294,7 +295,7 @@ class _NavigationSidebar extends StatelessWidget {
             ),
           const Spacer(),
           _NavigationItem(
-            icon: Icons.settings_outlined,
+            icon: CupertinoIcons.settings,
             label: 'Settings',
             selected: selectedSection == _DashboardSection.settings,
             expanded: expanded,
@@ -470,7 +471,7 @@ class _SectionPage extends StatelessWidget {
       _DashboardSection.status => _PagePanel(
           title: 'Status',
           subtitle: 'Real-time network and cellular metrics',
-          icon: Icons.info_outline,
+          icon: CupertinoIcons.info,
           child: _SignalTable(
             metrics: snapshot.metrics,
             splitCellId: splitCellId,
@@ -479,31 +480,31 @@ class _SectionPage extends StatelessWidget {
       _DashboardSection.signal => _PagePanel(
           title: 'Signal',
           subtitle: 'Signal tuning and spectrum analysis',
-          icon: Icons.monitor_heart_outlined,
+          icon: CupertinoIcons.waveform_path_ecg,
           child: const _SignalPlaceholder(),
         ),
       _DashboardSection.wan => _PagePanel(
           title: 'WAN',
           subtitle: 'Internet connection details',
-          icon: Icons.public_outlined,
+          icon: CupertinoIcons.globe,
           child: _WanCard(wan: snapshot.wan),
         ),
       _DashboardSection.system => _PagePanel(
           title: 'System',
           subtitle: 'Router runtime and firmware',
-          icon: Icons.memory_outlined,
+          icon: CupertinoIcons.desktopcomputer,
           child: _SystemCard(system: snapshot.system),
         ),
       _DashboardSection.subscriber => _PagePanel(
           title: 'Subscriber',
           subtitle: 'SIM and device identity',
-          icon: Icons.sim_card_outlined,
+          icon: CupertinoIcons.person_crop_square,
           child: _IdentityCard(snapshot: snapshot),
         ),
       _DashboardSection.settings => _PagePanel(
           title: 'Settings',
           subtitle: 'Configure router IP and dashboard preferences',
-          icon: Icons.settings_outlined,
+          icon: CupertinoIcons.settings,
           child: _SettingsCard(
             host: host,
             refreshIntervalSeconds: refreshIntervalSeconds,
@@ -690,7 +691,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                     color: colors.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.router_outlined, color: colors.primary, size: 18),
+                  child: Icon(CupertinoIcons.antenna_radiowaves_left_right, color: colors.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -784,7 +785,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                     color: colors.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.timer_outlined, color: colors.primary, size: 18),
+                  child: Icon(CupertinoIcons.timer, color: colors.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -868,7 +869,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                     color: colors.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.tune_outlined, color: colors.primary, size: 18),
+                  child: Icon(CupertinoIcons.slider_horizontal_3, color: colors.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -1037,7 +1038,7 @@ class _StatusBar extends StatelessWidget {
               ),
             ),
             icon: Icon(
-              Icons.refresh_rounded,
+              CupertinoIcons.refresh,
               size: 20,
               color: colors.onSurfaceVariant,
             ),
@@ -1473,7 +1474,7 @@ class _ErrorState extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    Icons.wifi_off_rounded,
+                    CupertinoIcons.wifi_slash,
                     size: 36,
                     color: theme.colorScheme.error,
                   ),
@@ -1502,7 +1503,7 @@ class _ErrorState extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  icon: const Icon(Icons.refresh_rounded),
+                  icon: const Icon(CupertinoIcons.refresh),
                   label: const Text('Refresh'),
                 ),
               ],
