@@ -1012,10 +1012,10 @@ class _StatusBar extends StatelessWidget {
           const SizedBox(width: 12),
           if (lastUpdated != null) ...<Widget>[
             Text(
-              _formatClock(lastUpdated!),
+              'Last Synced: ${_formatClock(lastUpdated!)}',
               style: TextStyle(
-                fontSize: 12,
-                color: colors.onSurfaceVariant,
+                fontSize: 10,
+                color: colors.outline,
                 fontWeight: FontWeight.w500,
               ),
             ),
