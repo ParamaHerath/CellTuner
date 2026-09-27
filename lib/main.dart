@@ -1936,24 +1936,17 @@ class _StatusBar extends StatelessWidget {
               style: IconButton.styleFrom(
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 padding: const EdgeInsets.all(4),
-                backgroundColor:
-                    colors.surfaceContainerHighest.withOpacity(0.6),
-                hoverColor: colors.primary.withOpacity(0.1),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  side: BorderSide(
-                    color: colors.outlineVariant.withOpacity(0.3),
-                  ),
-                ),
+                hoverColor: colors.primary.withOpacity(0.08),
+                highlightColor: Colors.transparent,
               ),
               icon: AnimatedIcon(
                 icon: AnimatedIcons.menu_close,
                 progress: menuAnimation ?? const AlwaysStoppedAnimation(0.0),
-                size: 20,
+                size: 22,
                 color: colors.onSurface,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
           ],
           Expanded(
             child: Wrap(
