@@ -275,7 +275,7 @@ class _NavigationSidebar extends StatelessWidget {
       ),
       child: Column(
         children: <Widget>[
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           _NavigationItem(
             icon: Icons.menu_rounded,
             label: '',
@@ -284,7 +284,6 @@ class _NavigationSidebar extends StatelessWidget {
             onTap: onToggle,
             tooltip: expanded ? 'Collapse navigation' : 'Expand navigation',
           ),
-          const SizedBox(height: 16),
           for (final item in _items)
             _NavigationItem(
               icon: item.$3,
@@ -301,7 +300,7 @@ class _NavigationSidebar extends StatelessWidget {
             expanded: expanded,
             onTap: () => onSectionSelected(_DashboardSection.settings),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
         ],
       ),
     );
