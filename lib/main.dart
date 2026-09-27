@@ -1071,20 +1071,20 @@ class _SignalBarsIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 17,
+      width: 21,
       height: 14,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: List.generate(5, (index) {
           final isActive = index < bars;
-          final height = 4.0 + (index * 2.5);
+          final height = 6.0 + (index * 2.0);
           return Container(
-            width: 2.5,
+            width: 3.2,
             height: height,
             decoration: BoxDecoration(
-              color: isActive ? color : color.withOpacity(0.25),
-              borderRadius: BorderRadius.circular(1),
+              color: isActive ? color : color.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(1.5),
             ),
           );
         }),
