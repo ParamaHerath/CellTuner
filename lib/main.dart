@@ -338,7 +338,7 @@ class _NavigationItem extends StatelessWidget {
       child: Tooltip(
         message: message,
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
           onTap: onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
@@ -346,7 +346,7 @@ class _NavigationItem extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: expanded ? 14 : 12),
             decoration: BoxDecoration(
               color: selected ? activeBg : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               mainAxisAlignment:
@@ -543,7 +543,7 @@ class _PagePanel extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: colors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(icon, size: 24, color: colors.primary),
             ),
@@ -587,7 +587,7 @@ class _SignalPlaceholder extends StatelessWidget {
       padding: const EdgeInsets.all(48),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
         ),
@@ -668,7 +668,7 @@ class _SettingsCardState extends State<_SettingsCard> {
     return Container(
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -689,7 +689,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: colors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Icon(CupertinoIcons.antenna_radiowaves_left_right, color: colors.primary, size: 18),
                 ),
@@ -732,19 +732,19 @@ class _SettingsCardState extends State<_SettingsCard> {
                         vertical: 12,
                       ),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(6),
                         borderSide: BorderSide(
                           color: colors.outlineVariant,
                         ),
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(6),
                         borderSide: BorderSide(
                           color: colors.outlineVariant.withOpacity(0.6),
                         ),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(6),
                         borderSide: BorderSide(
                           color: colors.primary,
                           width: 1.5,
@@ -763,7 +763,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                       vertical: 12,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                   ),
                   child: const Text('Save'),
@@ -783,7 +783,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: colors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Icon(CupertinoIcons.timer, color: colors.primary, size: 18),
                 ),
@@ -822,19 +822,19 @@ class _SettingsCardState extends State<_SettingsCard> {
                   vertical: 12,
                 ),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(6),
                   borderSide: BorderSide(
                     color: colors.outlineVariant,
                   ),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(6),
                   borderSide: BorderSide(
                     color: colors.outlineVariant.withOpacity(0.6),
                   ),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(6),
                   borderSide: BorderSide(
                     color: colors.primary,
                     width: 1.5,
@@ -867,7 +867,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: colors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Icon(CupertinoIcons.slider_horizontal_3, color: colors.primary, size: 18),
                 ),
@@ -1031,7 +1031,7 @@ class _StatusBar extends StatelessWidget {
               backgroundColor: colors.surfaceContainerHighest.withOpacity(0.6),
               hoverColor: colors.primary.withOpacity(0.1),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(6),
                 side: BorderSide(
                   color: colors.outlineVariant.withOpacity(0.3),
                 ),
@@ -1071,7 +1071,7 @@ class _SignalBarsIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 18,
+      width: 20,
       height: 12,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1084,7 +1084,7 @@ class _SignalBarsIcon extends StatelessWidget {
             height: height,
             decoration: BoxDecoration(
               color: isActive ? color : color.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(1.2),
+              borderRadius: BorderRadius.circular(1.5),
             ),
           );
         }),
@@ -1109,17 +1109,17 @@ class _SignalBarsIcon extends StatelessWidget {
   if (upper.contains('5G')) {
     return (
       rawNetworkType,
-      const Color(0xFFDBEAFE),
-      const Color(0xFF2563EB),
-      const Color(0xFF93C5FD),
+      const Color(0xFFE0E7FF), // light background
+      const Color(0xFF003BFF), // very saturated blue
+      const Color(0xFF4D73FF), // secondary blue
     );
   }
   if (upper.contains('4G') || upper.contains('LTE')) {
     return (
       rawNetworkType,
-      const Color(0xFFDCFCE7),
-      const Color(0xFF16A34A),
-      const Color(0xFF86EFAC),
+      const Color(0xFFD1FAE5), // light green
+      const Color(0xFF00A83B), // saturated green
+      const Color(0xFF4ADE80), // secondary green
     );
   }
   return (
@@ -1156,7 +1156,7 @@ class _StatusChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(5),
         border: Border.all(color: border),
       ),
       child: Row(
@@ -1168,7 +1168,7 @@ class _StatusChip extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: 11,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: fg,
             ),
           ),
@@ -1191,7 +1191,7 @@ class _InfoCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -1331,7 +1331,7 @@ class _SignalTable extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -1342,7 +1342,7 @@ class _SignalTable extends StatelessWidget {
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         child: Table(
           columnWidths: const <int, TableColumnWidth>{
             0: FlexColumnWidth(1.2),
@@ -1452,7 +1452,7 @@ class _ErrorState extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.4)),
             boxShadow: <BoxShadow>[
               BoxShadow(
@@ -1500,7 +1500,7 @@ class _ErrorState extends StatelessWidget {
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
                   icon: const Icon(CupertinoIcons.refresh),
