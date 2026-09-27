@@ -555,6 +555,10 @@ class _SectionPage extends StatelessWidget {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: <Widget>[
+              _CellIdBadge(
+                snapshot: snapshot,
+                splitCellId: splitCellId,
+              ),
               _MetricsDropdown(
                 selectedMetrics: selectedSignalMetrics,
                 onChanged: onSelectedSignalMetricsChanged,
@@ -717,6 +721,72 @@ class _PagePanel extends StatelessWidget {
         const SizedBox(height: 24),
         child,
       ],
+    );
+  }
+}
+
+class _CellIdBadge extends StatelessWidget {
+  const _CellIdBadge({
+    required this.snapshot,
+    required this.splitCellId,
+  });
+
+  final RouterSnapshot snapshot;
+  final bool splitCellId;
+
+  String _formattedCellId() {
+    RouterMetric? cellIdMetric;
+    for (final m in snapshot.metrics) {
+      if (m.label.toLowerCase() == 'cell id') {
+        cellIdMetric = m;
+        break;
+      }
+    }
+    if (cellIdMetric == null) return 'Cell ID: N/A';
+
+    var lteVal = cellIdMetric.valueFor(CellularLayer.lte);
+    var nr5gVal = cellIdMetric.valueFor(CellularLayer.nr5g);
+
+    if (splitCellId) {
+      if (lteVal != '-') lteVal = _formatCellIdString(lteVal, is5g: false);
+      if (nr5gVal != '-') nr5gVal = _formatCellIdString(nr5gVal, is5g: true);
+    }
+
+    if (lteVal != '-' && nr5gVal != '-' && lteVal != nr5gVal) {
+      return 'Cell ID: $lteVal / $nr5gVal';
+    } else if (lteVal != '-') {
+      return 'Cell ID: $lteVal';
+    } else if (nr5gVal != '-') {
+      return 'Cell ID: $nr5gVal';
+    }
+    return 'Cell ID: N/A';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(CupertinoIcons.number, size: 14, color: colors.primary),
+          const SizedBox(width: 8),
+          SelectableText(
+            _formattedCellId(),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: colors.onSurface,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
