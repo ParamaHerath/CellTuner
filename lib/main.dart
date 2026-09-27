@@ -259,23 +259,26 @@ class _DashboardShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            statusBar,
-            Expanded(
-              child: Row(
-                children: <Widget>[
-                  _NavigationSidebar(
-                    selectedSection: selectedSection,
-                    expanded: sidebarExpanded,
-                    onSectionSelected: onSectionSelected,
-                    onToggle: onToggleSidebar,
-                  ),
-                  Expanded(child: child),
-                ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 535, minHeight: 500),
+          child: Column(
+            children: <Widget>[
+              statusBar,
+              Expanded(
+                child: Row(
+                  children: <Widget>[
+                    _NavigationSidebar(
+                      selectedSection: selectedSection,
+                      expanded: sidebarExpanded,
+                      onSectionSelected: onSectionSelected,
+                      onToggle: onToggleSidebar,
+                    ),
+                    Expanded(child: child),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
