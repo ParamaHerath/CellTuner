@@ -954,11 +954,22 @@ class _StatusBar extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    Text(
-                      'Dialog AirFibre',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 10,
+                      children: <Widget>[
+                        Text(
+                          'Dialog AirFibre',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                        _StatusChip(
+                          icon: Icons.cell_tower_outlined,
+                          label: networkType.isEmpty ? '-' : networkType,
+                          isAccent: networkType.isNotEmpty,
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -970,11 +981,6 @@ class _StatusBar extends StatelessWidget {
                       ),
                     ),
                   ],
-                ),
-                _StatusChip(
-                  icon: Icons.cell_tower_outlined,
-                  label: networkType.isEmpty ? '-' : networkType,
-                  isAccent: networkType.isNotEmpty,
                 ),
               ],
             ),
