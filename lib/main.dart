@@ -259,23 +259,26 @@ class _DashboardShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            statusBar,
-            Expanded(
-              child: Row(
-                children: <Widget>[
-                  _NavigationSidebar(
-                    selectedSection: selectedSection,
-                    expanded: sidebarExpanded,
-                    onSectionSelected: onSectionSelected,
-                    onToggle: onToggleSidebar,
-                  ),
-                  Expanded(child: child),
-                ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 535, minHeight: 500),
+          child: Column(
+            children: <Widget>[
+              statusBar,
+              Expanded(
+                child: Row(
+                  children: <Widget>[
+                    _NavigationSidebar(
+                      selectedSection: selectedSection,
+                      expanded: sidebarExpanded,
+                      onSectionSelected: onSectionSelected,
+                      onToggle: onToggleSidebar,
+                    ),
+                    Expanded(child: child),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -310,6 +313,7 @@ class _NavigationSidebar extends StatelessWidget {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       width: expanded ? 248 : 76,
+      clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         color: colors.surface,
         border: Border(
@@ -387,36 +391,56 @@ class _NavigationItem extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             height: 48,
-            padding: EdgeInsets.symmetric(horizontal: expanded ? 14 : 12),
             decoration: BoxDecoration(
               color: selected ? activeBg : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
-              mainAxisAlignment:
-                  expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
               children: <Widget>[
-                Icon(
-                  icon,
-                  size: 22,
-                  color: selected ? activeFg : inactiveFg,
+                const SizedBox(width: 4),
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: Center(
+                    child: Icon(
+                      icon,
+                      size: 22,
+                      color: selected ? activeFg : inactiveFg,
+                    ),
+                  ),
                 ),
-                if (expanded && label.isNotEmpty) ...<Widget>[
-                  const SizedBox(width: 14),
-                  Flexible(
-                    child: Text(
-                      label,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: selected ? activeFg : colors.onSurface,
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w500,
-                        letterSpacing: -0.1,
+                if (label.isNotEmpty)
+                  Expanded(
+                    child: ClipRect(
+                      child: OverflowBox(
+                        alignment: Alignment.centerLeft,
+                        minWidth: 0,
+                        maxWidth: 160,
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 180),
+                          opacity: expanded ? 1.0 : 0.0,
+                          curve: Curves.easeInOut,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 6, right: 12),
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.clip,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: selected ? activeFg : colors.onSurface,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                letterSpacing: -0.1,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ],
               ],
             ),
           ),
@@ -425,6 +449,7 @@ class _NavigationItem extends StatelessWidget {
     );
   }
 }
+
 
 class _DashboardContent extends StatelessWidget {
   const _DashboardContent({
