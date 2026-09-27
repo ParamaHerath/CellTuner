@@ -57,6 +57,8 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
   _DashboardSection _selectedSection = _DashboardSection.status;
   bool _sidebarExpanded = true;
   final List<SignalMetricSample> _signalHistory = <SignalMetricSample>[];
+  Set<String> _selectedSignalMetrics = <String>{'RSSI', 'RSRP', 'RSRQ', 'SINR'};
+  String _signalTechMode = 'Both (4G & 5G)';
 
   RouterSnapshotLoader get _loader =>
       widget.snapshotLoader ?? _client!.fetchSnapshot;
@@ -213,12 +215,20 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
             refreshIntervalSeconds: _refreshIntervalSeconds,
             splitCellId: _splitCellId,
             signalHistory: _signalHistory,
+            selectedSignalMetrics: _selectedSignalMetrics,
+            signalTechMode: _signalTechMode,
             lastUpdated: _lastUpdated,
             section: _selectedSection,
             onRefresh: _refresh,
             onHostChanged: _updateHost,
             onRefreshIntervalChanged: _updateRefreshInterval,
             onSplitCellIdChanged: _updateSplitCellId,
+            onSelectedSignalMetricsChanged: (metrics) {
+              setState(() => _selectedSignalMetrics = metrics);
+            },
+            onSignalTechModeChanged: (mode) {
+              setState(() => _signalTechMode = mode);
+            },
           ),
         );
       },
@@ -423,12 +433,16 @@ class _DashboardContent extends StatelessWidget {
     required this.refreshIntervalSeconds,
     required this.splitCellId,
     required this.signalHistory,
+    required this.selectedSignalMetrics,
+    required this.signalTechMode,
     required this.lastUpdated,
     required this.section,
     required this.onRefresh,
     required this.onHostChanged,
     required this.onRefreshIntervalChanged,
     required this.onSplitCellIdChanged,
+    required this.onSelectedSignalMetricsChanged,
+    required this.onSignalTechModeChanged,
   });
 
   final RouterSnapshot snapshot;
@@ -436,12 +450,16 @@ class _DashboardContent extends StatelessWidget {
   final double refreshIntervalSeconds;
   final bool splitCellId;
   final List<SignalMetricSample> signalHistory;
+  final Set<String> selectedSignalMetrics;
+  final String signalTechMode;
   final DateTime? lastUpdated;
   final _DashboardSection section;
   final VoidCallback onRefresh;
   final ValueChanged<String> onHostChanged;
   final ValueChanged<double> onRefreshIntervalChanged;
   final ValueChanged<bool> onSplitCellIdChanged;
+  final ValueChanged<Set<String>> onSelectedSignalMetricsChanged;
+  final ValueChanged<String> onSignalTechModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -459,9 +477,13 @@ class _DashboardContent extends StatelessWidget {
                 refreshIntervalSeconds: refreshIntervalSeconds,
                 splitCellId: splitCellId,
                 signalHistory: signalHistory,
+                selectedSignalMetrics: selectedSignalMetrics,
+                signalTechMode: signalTechMode,
                 onHostChanged: onHostChanged,
                 onRefreshIntervalChanged: onRefreshIntervalChanged,
                 onSplitCellIdChanged: onSplitCellIdChanged,
+                onSelectedSignalMetricsChanged: onSelectedSignalMetricsChanged,
+                onSignalTechModeChanged: onSignalTechModeChanged,
               ),
               const SizedBox(height: 40),
               Text(
@@ -489,9 +511,13 @@ class _SectionPage extends StatelessWidget {
     required this.refreshIntervalSeconds,
     required this.splitCellId,
     required this.signalHistory,
+    required this.selectedSignalMetrics,
+    required this.signalTechMode,
     required this.onHostChanged,
     required this.onRefreshIntervalChanged,
     required this.onSplitCellIdChanged,
+    required this.onSelectedSignalMetricsChanged,
+    required this.onSignalTechModeChanged,
   });
 
   final _DashboardSection section;
@@ -500,9 +526,13 @@ class _SectionPage extends StatelessWidget {
   final double refreshIntervalSeconds;
   final bool splitCellId;
   final List<SignalMetricSample> signalHistory;
+  final Set<String> selectedSignalMetrics;
+  final String signalTechMode;
   final ValueChanged<String> onHostChanged;
   final ValueChanged<double> onRefreshIntervalChanged;
   final ValueChanged<bool> onSplitCellIdChanged;
+  final ValueChanged<Set<String>> onSelectedSignalMetricsChanged;
+  final ValueChanged<String> onSignalTechModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -520,9 +550,26 @@ class _SectionPage extends StatelessWidget {
           title: 'Signal',
           subtitle: 'Signal tuning and spectrum analysis',
           icon: CupertinoIcons.waveform_path_ecg,
+          headerActions: Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[
+              _MetricsDropdown(
+                selectedMetrics: selectedSignalMetrics,
+                onChanged: onSelectedSignalMetricsChanged,
+              ),
+              _TechModeDropdown(
+                mode: signalTechMode,
+                onChanged: onSignalTechModeChanged,
+              ),
+            ],
+          ),
           child: _SignalPage(
             history: signalHistory,
             snapshot: snapshot,
+            selectedMetrics: selectedSignalMetrics,
+            techMode: signalTechMode,
           ),
         ),
       _DashboardSection.wan => _PagePanel(
@@ -566,12 +613,14 @@ class _PagePanel extends StatelessWidget {
     required this.subtitle,
     required this.icon,
     required this.child,
+    this.headerActions,
   });
 
   final String title;
   final String subtitle;
   final IconData icon;
   final Widget child;
+  final Widget? headerActions;
 
   @override
   Widget build(BuildContext context) {
@@ -579,43 +628,214 @@ class _PagePanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Row(
-          children: <Widget>[
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: colors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, size: 24, color: colors.primary),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 640;
+            if (isNarrow && headerActions != null) {
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.3,
+                  Row(
+                    children: <Widget>[
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: colors.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
                         ),
+                        child: Icon(icon, size: 24, color: colors.primary),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              title,
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.3,
+                                  ),
+                            ),
+                            Text(
+                              subtitle,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: colors.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
+                  const SizedBox(height: 12),
+                  headerActions!,
                 ],
-              ),
-            ),
-          ],
+              );
+            }
+            return Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, size: 24, color: colors.primary),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                            ),
+                      ),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (headerActions != null) ...<Widget>[
+                  const SizedBox(width: 12),
+                  headerActions!,
+                ],
+              ],
+            );
+          },
         ),
         const SizedBox(height: 24),
         child,
       ],
+    );
+  }
+}
+
+class _MetricsDropdown extends StatelessWidget {
+  const _MetricsDropdown({
+    required this.selectedMetrics,
+    required this.onChanged,
+  });
+
+  final Set<String> selectedMetrics;
+  final ValueChanged<Set<String>> onChanged;
+
+  String _formatLabel() {
+    if (selectedMetrics.length == 4) return 'Metrics: All (4/4)';
+    if (selectedMetrics.isEmpty) return 'Metrics: None (0/4)';
+    final sorted = ['RSSI', 'RSRP', 'RSRQ', 'SINR'].where(selectedMetrics.contains).toList();
+    return 'Metrics: ${sorted.join(", ")}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return PopupMenuButton<String>(
+      tooltip: 'Select metrics',
+      onSelected: (metricKey) {
+        final updated = Set<String>.from(selectedMetrics);
+        if (updated.contains(metricKey)) {
+          updated.remove(metricKey);
+        } else {
+          updated.add(metricKey);
+        }
+        onChanged(updated);
+      },
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        for (final m in <String>['RSSI', 'RSRP', 'RSRQ', 'SINR'])
+          CheckedPopupMenuItem<String>(
+            value: m,
+            checked: selectedMetrics.contains(m),
+            child: Text(m, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(CupertinoIcons.slider_horizontal_3, size: 14, color: colors.primary),
+            const SizedBox(width: 8),
+            Text(
+              _formatLabel(),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: colors.onSurface,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(CupertinoIcons.chevron_down, size: 13, color: colors.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TechModeDropdown extends StatelessWidget {
+  const _TechModeDropdown({
+    required this.mode,
+    required this.onChanged,
+  });
+
+  final String mode;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: mode,
+          isDense: true,
+          icon: const Icon(CupertinoIcons.chevron_down, size: 13),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: colors.onSurface,
+          ),
+          items: const [
+            DropdownMenuItem(
+              value: 'Both (4G & 5G)',
+              child: Text('Both (4G & 5G)'),
+            ),
+            DropdownMenuItem(
+              value: '4G LTE Only',
+              child: Text('4G LTE Only'),
+            ),
+            DropdownMenuItem(
+              value: '5G NR Only',
+              child: Text('5G NR Only'),
+            ),
+          ],
+          onChanged: (val) {
+            if (val != null) onChanged(val);
+          },
+        ),
+      ),
     );
   }
 }
