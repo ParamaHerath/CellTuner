@@ -398,6 +398,7 @@ class _DashboardContent extends StatelessWidget {
         _StatusBar(
           host: host,
           networkType: snapshot.networkType,
+          metrics: snapshot.metrics,
           lastUpdated: lastUpdated,
           onRefresh: onRefresh,
         ),
@@ -920,12 +921,14 @@ class _StatusBar extends StatelessWidget {
   const _StatusBar({
     required this.host,
     required this.networkType,
+    required this.metrics,
     required this.lastUpdated,
     required this.onRefresh,
   });
 
   final String host;
   final String networkType;
+  final List<RouterMetric> metrics;
   final DateTime? lastUpdated;
   final VoidCallback onRefresh;
 
@@ -933,6 +936,23 @@ class _StatusBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final badgeStyle = _getNetworkBadgeStyle(networkType, colors);
+
+    int? primaryRsrp;
+    for (final m in metrics) {
+      if (m.label.toUpperCase() == 'RSRP') {
+        final nr5gVal = int.tryParse(m.nr5g.replaceAll(RegExp(r'[^0-9-]'), ''));
+        if (nr5gVal != null && nr5gVal != 0) {
+          primaryRsrp = nr5gVal;
+          break;
+        }
+        final lteVal = int.tryParse(m.lte.replaceAll(RegExp(r'[^0-9-]'), ''));
+        if (lteVal != null && lteVal != 0) {
+          primaryRsrp = lteVal;
+          break;
+        }
+      }
+    }
+    final signalBars = _calculateSignalBars(primaryRsrp);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
@@ -967,7 +987,7 @@ class _StatusBar extends StatelessWidget {
                               ),
                         ),
                         _StatusChip(
-                          icon: Icons.cell_tower_outlined,
+                          signalBars: signalBars,
                           label: badgeStyle.$1,
                           backgroundColor: badgeStyle.$2,
                           foregroundColor: badgeStyle.$3,
@@ -1026,6 +1046,50 @@ class _StatusBar extends StatelessWidget {
   }
 }
 
+int _calculateSignalBars(int? rsrp) {
+  if (rsrp == null) return 0;
+  if (rsrp >= -85) return 5;
+  if (rsrp >= -95) return 4;
+  if (rsrp >= -105) return 3;
+  if (rsrp >= -115) return 2;
+  if (rsrp >= -125) return 1;
+  return 0;
+}
+
+class _SignalBarsIcon extends StatelessWidget {
+  const _SignalBarsIcon({
+    required this.bars,
+    required this.color,
+  });
+
+  final int bars;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 17,
+      height: 14,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: List.generate(5, (index) {
+          final isActive = index < bars;
+          final height = 4.0 + (index * 2.5);
+          return Container(
+            width: 2.5,
+            height: height,
+            decoration: BoxDecoration(
+              color: isActive ? color : color.withOpacity(0.25),
+              borderRadius: BorderRadius.circular(1),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
 (String, Color, Color, Color) _getNetworkBadgeStyle(
   String rawNetworkType,
   ColorScheme colors,
@@ -1065,14 +1129,14 @@ class _StatusBar extends StatelessWidget {
 
 class _StatusChip extends StatelessWidget {
   const _StatusChip({
-    required this.icon,
+    required this.signalBars,
     required this.label,
     this.backgroundColor,
     this.foregroundColor,
     this.borderColor,
   });
 
-  final IconData icon;
+  final int signalBars;
   final String label;
   final Color? backgroundColor;
   final Color? foregroundColor;
@@ -1095,8 +1159,8 @@ class _StatusChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, size: 14, color: fg),
-          const SizedBox(width: 6),
+          _SignalBarsIcon(bars: signalBars, color: fg),
+          const SizedBox(width: 7),
           Text(
             label,
             style: TextStyle(
