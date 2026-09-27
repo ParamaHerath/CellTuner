@@ -322,42 +322,35 @@ class _NavigationSidebar extends StatelessWidget {
           ),
         ),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const NeverScrollableScrollPhysics(),
-        child: SizedBox(
-          width: 248,
-          child: Column(
-            children: <Widget>[
-              const SizedBox(height: 8),
-              _NavigationItem(
-                icon: CupertinoIcons.bars,
-                label: '',
-                selected: false,
-                expanded: expanded,
-                onTap: onToggle,
-                tooltip: expanded ? 'Collapse navigation' : 'Expand navigation',
-              ),
-              for (final item in _items)
-                _NavigationItem(
-                  icon: item.$3,
-                  label: item.$2,
-                  selected: selectedSection == item.$1,
-                  expanded: expanded,
-                  onTap: () => onSectionSelected(item.$1),
-                ),
-              const Spacer(),
-              _NavigationItem(
-                icon: CupertinoIcons.settings,
-                label: 'Settings',
-                selected: selectedSection == _DashboardSection.settings,
-                expanded: expanded,
-                onTap: () => onSectionSelected(_DashboardSection.settings),
-              ),
-              const SizedBox(height: 8),
-            ],
+      child: Column(
+        children: <Widget>[
+          const SizedBox(height: 8),
+          _NavigationItem(
+            icon: CupertinoIcons.bars,
+            label: '',
+            selected: false,
+            expanded: expanded,
+            onTap: onToggle,
+            tooltip: expanded ? 'Collapse navigation' : 'Expand navigation',
           ),
-        ),
+          for (final item in _items)
+            _NavigationItem(
+              icon: item.$3,
+              label: item.$2,
+              selected: selectedSection == item.$1,
+              expanded: expanded,
+              onTap: () => onSectionSelected(item.$1),
+            ),
+          const Spacer(),
+          _NavigationItem(
+            icon: CupertinoIcons.settings,
+            label: 'Settings',
+            selected: selectedSection == _DashboardSection.settings,
+            expanded: expanded,
+            onTap: () => onSectionSelected(_DashboardSection.settings),
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }
@@ -398,15 +391,16 @@ class _NavigationItem extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: selected ? activeBg : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               children: <Widget>[
+                const SizedBox(width: 4),
                 SizedBox(
-                  width: 32,
+                  width: 48,
+                  height: 48,
                   child: Center(
                     child: Icon(
                       icon,
@@ -415,24 +409,38 @@ class _NavigationItem extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (label.isNotEmpty) ...<Widget>[
-                  const SizedBox(width: 10),
+                if (label.isNotEmpty)
                   Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.clip,
-                      softWrap: false,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: selected ? activeFg : colors.onSurface,
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w500,
-                        letterSpacing: -0.1,
+                    child: ClipRect(
+                      child: OverflowBox(
+                        alignment: Alignment.centerLeft,
+                        minWidth: 0,
+                        maxWidth: 160,
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 180),
+                          opacity: expanded ? 1.0 : 0.0,
+                          curve: Curves.easeInOut,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 6, right: 12),
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.clip,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: selected ? activeFg : colors.onSurface,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                letterSpacing: -0.1,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ],
               ],
             ),
           ),
@@ -441,6 +449,7 @@ class _NavigationItem extends StatelessWidget {
     );
   }
 }
+
 
 class _DashboardContent extends StatelessWidget {
   const _DashboardContent({
