@@ -313,6 +313,7 @@ class _NavigationSidebar extends StatelessWidget {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       width: expanded ? 248 : 76,
+      clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         color: colors.surface,
         border: Border(
@@ -321,35 +322,42 @@ class _NavigationSidebar extends StatelessWidget {
           ),
         ),
       ),
-      child: Column(
-        children: <Widget>[
-          const SizedBox(height: 8),
-          _NavigationItem(
-            icon: CupertinoIcons.bars,
-            label: '',
-            selected: false,
-            expanded: expanded,
-            onTap: onToggle,
-            tooltip: expanded ? 'Collapse navigation' : 'Expand navigation',
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        child: SizedBox(
+          width: 248,
+          child: Column(
+            children: <Widget>[
+              const SizedBox(height: 8),
+              _NavigationItem(
+                icon: CupertinoIcons.bars,
+                label: '',
+                selected: false,
+                expanded: expanded,
+                onTap: onToggle,
+                tooltip: expanded ? 'Collapse navigation' : 'Expand navigation',
+              ),
+              for (final item in _items)
+                _NavigationItem(
+                  icon: item.$3,
+                  label: item.$2,
+                  selected: selectedSection == item.$1,
+                  expanded: expanded,
+                  onTap: () => onSectionSelected(item.$1),
+                ),
+              const Spacer(),
+              _NavigationItem(
+                icon: CupertinoIcons.settings,
+                label: 'Settings',
+                selected: selectedSection == _DashboardSection.settings,
+                expanded: expanded,
+                onTap: () => onSectionSelected(_DashboardSection.settings),
+              ),
+              const SizedBox(height: 8),
+            ],
           ),
-          for (final item in _items)
-            _NavigationItem(
-              icon: item.$3,
-              label: item.$2,
-              selected: selectedSection == item.$1,
-              expanded: expanded,
-              onTap: () => onSectionSelected(item.$1),
-            ),
-          const Spacer(),
-          _NavigationItem(
-            icon: CupertinoIcons.settings,
-            label: 'Settings',
-            selected: selectedSection == _DashboardSection.settings,
-            expanded: expanded,
-            onTap: () => onSectionSelected(_DashboardSection.settings),
-          ),
-          const SizedBox(height: 8),
-        ],
+        ),
       ),
     );
   }
@@ -390,26 +398,31 @@ class _NavigationItem extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             height: 48,
-            padding: EdgeInsets.symmetric(horizontal: expanded ? 14 : 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: selected ? activeBg : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
-              mainAxisAlignment:
-                  expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
               children: <Widget>[
-                Icon(
-                  icon,
-                  size: 22,
-                  color: selected ? activeFg : inactiveFg,
+                SizedBox(
+                  width: 32,
+                  child: Center(
+                    child: Icon(
+                      icon,
+                      size: 22,
+                      color: selected ? activeFg : inactiveFg,
+                    ),
+                  ),
                 ),
-                if (expanded && label.isNotEmpty) ...<Widget>[
-                  const SizedBox(width: 14),
-                  Flexible(
+                if (label.isNotEmpty) ...<Widget>[
+                  const SizedBox(width: 10),
+                  Expanded(
                     child: Text(
                       label,
-                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                      softWrap: false,
                       style: TextStyle(
                         fontSize: 14,
                         color: selected ? activeFg : colors.onSurface,
