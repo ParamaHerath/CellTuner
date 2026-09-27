@@ -1067,19 +1067,14 @@ class _StatusChip extends StatelessWidget {
 
 class _InfoCard extends StatelessWidget {
   const _InfoCard({
-    required this.title,
-    required this.icon,
     required this.rows,
   });
 
-  final String title;
-  final IconData icon;
   final List<_InfoRowData> rows;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final colors = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
         color: colors.surface,
@@ -1098,27 +1093,6 @@ class _InfoCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: colors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, color: colors.primary, size: 18),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
             for (var i = 0; i < rows.length; i++) ...<Widget>[
               if (i > 0)
                 Divider(
@@ -1184,8 +1158,6 @@ class _IdentityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _InfoCard(
-      title: 'Subscriber',
-      icon: Icons.sim_card_outlined,
       rows: <_InfoRowData>[
         _InfoRowData('IMSI', snapshot.imsi),
         _InfoRowData('IMEI', snapshot.imei),
@@ -1202,8 +1174,6 @@ class _WanCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _InfoCard(
-      title: 'WAN',
-      icon: Icons.public_outlined,
       rows: <_InfoRowData>[
         _InfoRowData('IP Address', wan.ipAddress),
         _InfoRowData('Preferred DNS', wan.preferredDns),
@@ -1224,8 +1194,6 @@ class _SystemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _InfoCard(
-      title: 'System',
-      icon: Icons.memory_outlined,
       rows: <_InfoRowData>[
         _InfoRowData('Runtime', system.formattedUptime),
         _InfoRowData('Firmware', system.firmwareVersion),
