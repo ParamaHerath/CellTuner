@@ -166,6 +166,13 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
           onToggleSidebar: () {
             setState(() => _sidebarExpanded = !_sidebarExpanded);
           },
+          statusBar: _StatusBar(
+            host: _host,
+            networkType: data.networkType,
+            metrics: data.metrics,
+            lastUpdated: _lastUpdated,
+            onRefresh: _refresh,
+          ),
           child: _DashboardContent(
             snapshot: data,
             host: _host,
@@ -192,6 +199,7 @@ class _DashboardShell extends StatelessWidget {
     required this.sidebarExpanded,
     required this.onSectionSelected,
     required this.onToggleSidebar,
+    required this.statusBar,
     required this.child,
   });
 
@@ -199,21 +207,29 @@ class _DashboardShell extends StatelessWidget {
   final bool sidebarExpanded;
   final ValueChanged<_DashboardSection> onSectionSelected;
   final VoidCallback onToggleSidebar;
+  final Widget statusBar;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Row(
+        child: Column(
           children: <Widget>[
-            _NavigationSidebar(
-              selectedSection: selectedSection,
-              expanded: sidebarExpanded,
-              onSectionSelected: onSectionSelected,
-              onToggle: onToggleSidebar,
+            statusBar,
+            Expanded(
+              child: Row(
+                children: <Widget>[
+                  _NavigationSidebar(
+                    selectedSection: selectedSection,
+                    expanded: sidebarExpanded,
+                    onSectionSelected: onSectionSelected,
+                    onToggle: onToggleSidebar,
+                  ),
+                  Expanded(child: child),
+                ],
+              ),
             ),
-            Expanded(child: child),
           ],
         ),
       ),
@@ -393,50 +409,37 @@ class _DashboardContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        _StatusBar(
-          host: host,
-          networkType: snapshot.networkType,
-          metrics: snapshot.metrics,
-          lastUpdated: lastUpdated,
-          onRefresh: onRefresh,
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(28),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1120),
-                child: Column(
-                  children: <Widget>[
-                    _SectionPage(
-                      section: section,
-                      snapshot: snapshot,
-                      host: host,
-                      refreshIntervalSeconds: refreshIntervalSeconds,
-                      splitCellId: splitCellId,
-                      onHostChanged: onHostChanged,
-                      onRefreshIntervalChanged: onRefreshIntervalChanged,
-                      onSplitCellIdChanged: onSplitCellIdChanged,
-                    ),
-                    const SizedBox(height: 40),
-                    Text(
-                      'CellTuner - v0.0.1',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0.3,
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                    ),
-                  ],
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(28),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1120),
+          child: Column(
+            children: <Widget>[
+              _SectionPage(
+                section: section,
+                snapshot: snapshot,
+                host: host,
+                refreshIntervalSeconds: refreshIntervalSeconds,
+                splitCellId: splitCellId,
+                onHostChanged: onHostChanged,
+                onRefreshIntervalChanged: onRefreshIntervalChanged,
+                onSplitCellIdChanged: onSplitCellIdChanged,
+              ),
+              const SizedBox(height: 40),
+              Text(
+                'CellTuner - v0.0.1',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.3,
+                  color: Theme.of(context).colorScheme.outline,
                 ),
               ),
-            ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -1153,7 +1156,7 @@ class _StatusChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: border),
       ),
       child: Row(
