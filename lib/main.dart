@@ -121,7 +121,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
 
   void _recordSignalSnapshot(RouterSnapshot snapshot) {
     final now = DateTime.now();
-    final cutoff = now.subtract(const Duration(seconds: 32));
+    final cutoff = now.subtract(const Duration(seconds: 65));
 
     double? findVal(String key, CellularLayer layer) {
       for (final m in snapshot.metrics) {
@@ -1362,7 +1362,7 @@ class _MetricLineChartPainter extends CustomPainter {
       final single = pointsSource.first;
       pointsSource = [
         SignalMetricSample(
-          timestamp: now.subtract(const Duration(seconds: 30)),
+          timestamp: now.subtract(const Duration(seconds: 60)),
           rssiLte: single.rssiLte,
           rssiNr5g: single.rssiNr5g,
           rsrpLte: single.rsrpLte,
@@ -1451,9 +1451,10 @@ class _MetricLineChartPainter extends CustomPainter {
     }
 
     final xLabels = <(double, String)>[
-      (0.0, '-30s'),
-      (0.333, '-20s'),
-      (0.666, '-10s'),
+      (0.0, '-60s'),
+      (0.25, '-45s'),
+      (0.5, '-30s'),
+      (0.75, '-15s'),
       (1.0, 'Now'),
     ];
 
@@ -1479,7 +1480,7 @@ class _MetricLineChartPainter extends CustomPainter {
         final val = sample.getValue(metricKey, is5g: is5g);
         if (val == null) continue;
         final age = now.difference(sample.timestamp).inMilliseconds / 1000.0;
-        final x = chartRight - ((age / 30.0) * chartWidth);
+        final x = chartRight - ((age / 60.0) * chartWidth);
         final clampedX = x.clamp(chartLeft, chartRight);
         final yRatio = (val - minY) / (maxY - minY);
         final y = chartBottom - (yRatio * chartHeight);
