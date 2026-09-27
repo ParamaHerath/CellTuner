@@ -24,9 +24,10 @@ class CellTunerApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF2563EB),
-          surface: const Color(0xFFF7F8FA),
+          surface: Colors.white,
+          surfaceContainerHighest: const Color(0xFFF1F5F9),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF7F8FA),
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
         useMaterial3: true,
       ),
       home: RouterDashboardScreen(snapshotLoader: snapshotLoader),
@@ -44,12 +45,16 @@ class RouterDashboardScreen extends StatefulWidget {
 }
 
 class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
-  static const _host = '192.168.8.1';
+  String _host = '192.168.8.1';
+  double _refreshIntervalSeconds = 1.0;
+  bool _splitCellId = false;
 
-  late final RouterApiClient? _client;
+  late RouterApiClient? _client;
   late Future<RouterSnapshot> _snapshotFuture;
   Timer? _refreshTimer;
   DateTime? _lastUpdated;
+  _DashboardSection _selectedSection = _DashboardSection.status;
+  bool _sidebarExpanded = true;
 
   RouterSnapshotLoader get _loader =>
       widget.snapshotLoader ?? _client!.fetchSnapshot;
@@ -61,11 +66,17 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
         widget.snapshotLoader == null ? RouterApiClient(host: _host) : null;
     _snapshotFuture = _loadSnapshot();
     if (widget.snapshotLoader == null) {
-      _refreshTimer = Timer.periodic(
-        const Duration(seconds: 10),
-        (_) => _refresh(),
-      );
+      _startRefreshTimer();
     }
+  }
+
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
+    final ms = (_refreshIntervalSeconds * 1000).round();
+    _refreshTimer = Timer.periodic(
+      Duration(milliseconds: ms),
+      (_) => _refresh(),
+    );
   }
 
   @override
@@ -91,43 +102,265 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
     });
   }
 
+  void _updateHost(String newHost) {
+    final trimmed = newHost.trim();
+    if (trimmed.isEmpty || trimmed == _host) return;
+    setState(() {
+      _host = trimmed;
+      if (widget.snapshotLoader == null) {
+        _client?.close();
+        _client = RouterApiClient(host: _host);
+      }
+      _refresh();
+    });
+  }
+
+  void _updateRefreshInterval(double seconds) {
+    if (seconds == _refreshIntervalSeconds) return;
+    setState(() {
+      _refreshIntervalSeconds = seconds;
+      if (widget.snapshotLoader == null) {
+        _startRefreshTimer();
+      }
+    });
+  }
+
+  void _updateSplitCellId(bool enabled) {
+    if (enabled == _splitCellId) return;
+    setState(() {
+      _splitCellId = enabled;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('CellTuner'),
-        actions: <Widget>[
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: FutureBuilder<RouterSnapshot>(
-        future: _snapshotFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return FutureBuilder<RouterSnapshot>(
+      future: _snapshotFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
 
-          if (snapshot.hasError) {
-            return _ErrorState(
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: _ErrorState(
               host: _host,
               error: snapshot.error.toString(),
               onRefresh: _refresh,
-            );
-          }
+            ),
+          );
+        }
 
-          final data = snapshot.requireData;
-          return _DashboardContent(
+        final data = snapshot.requireData;
+        return _DashboardShell(
+          selectedSection: _selectedSection,
+          sidebarExpanded: _sidebarExpanded,
+          onSectionSelected: (section) {
+            setState(() => _selectedSection = section);
+          },
+          onToggleSidebar: () {
+            setState(() => _sidebarExpanded = !_sidebarExpanded);
+          },
+          child: _DashboardContent(
             snapshot: data,
             host: _host,
+            refreshIntervalSeconds: _refreshIntervalSeconds,
+            splitCellId: _splitCellId,
             lastUpdated: _lastUpdated,
-          );
-        },
+            section: _selectedSection,
+            onRefresh: _refresh,
+            onHostChanged: _updateHost,
+            onRefreshIntervalChanged: _updateRefreshInterval,
+            onSplitCellIdChanged: _updateSplitCellId,
+          ),
+        );
+      },
+    );
+  }
+}
+
+enum _DashboardSection { status, signal, wan, system, subscriber, settings }
+
+class _DashboardShell extends StatelessWidget {
+  const _DashboardShell({
+    required this.selectedSection,
+    required this.sidebarExpanded,
+    required this.onSectionSelected,
+    required this.onToggleSidebar,
+    required this.child,
+  });
+
+  final _DashboardSection selectedSection;
+  final bool sidebarExpanded;
+  final ValueChanged<_DashboardSection> onSectionSelected;
+  final VoidCallback onToggleSidebar;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Row(
+          children: <Widget>[
+            _NavigationSidebar(
+              selectedSection: selectedSection,
+              expanded: sidebarExpanded,
+              onSectionSelected: onSectionSelected,
+              onToggle: onToggleSidebar,
+            ),
+            Expanded(child: child),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavigationSidebar extends StatelessWidget {
+  const _NavigationSidebar({
+    required this.selectedSection,
+    required this.expanded,
+    required this.onSectionSelected,
+    required this.onToggle,
+  });
+
+  final _DashboardSection selectedSection;
+  final bool expanded;
+  final ValueChanged<_DashboardSection> onSectionSelected;
+  final VoidCallback onToggle;
+
+  static const _items = <(_DashboardSection, String, IconData)>[
+    (_DashboardSection.status, 'Status', Icons.info_outline),
+    (_DashboardSection.signal, 'Signal', Icons.monitor_heart_outlined),
+    (_DashboardSection.wan, 'WAN', Icons.public_outlined),
+    (_DashboardSection.system, 'System', Icons.memory_outlined),
+    (_DashboardSection.subscriber, 'Subscriber', Icons.sim_card_outlined),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      width: expanded ? 248 : 76,
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(
+          right: BorderSide(
+            color: colors.outlineVariant.withOpacity(0.3),
+          ),
+        ),
+      ),
+      child: Column(
+        children: <Widget>[
+          const SizedBox(height: 14),
+          _NavigationItem(
+            icon: Icons.menu_rounded,
+            label: '',
+            selected: false,
+            expanded: expanded,
+            onTap: onToggle,
+            tooltip: expanded ? 'Collapse navigation' : 'Expand navigation',
+          ),
+          const SizedBox(height: 16),
+          for (final item in _items)
+            _NavigationItem(
+              icon: item.$3,
+              label: item.$2,
+              selected: selectedSection == item.$1,
+              expanded: expanded,
+              onTap: () => onSectionSelected(item.$1),
+            ),
+          const Spacer(),
+          _NavigationItem(
+            icon: Icons.settings_outlined,
+            label: 'Settings',
+            selected: selectedSection == _DashboardSection.settings,
+            expanded: expanded,
+            onTap: () => onSectionSelected(_DashboardSection.settings),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavigationItem extends StatelessWidget {
+  const _NavigationItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.expanded,
+    required this.onTap,
+    this.tooltip,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final bool expanded;
+  final VoidCallback onTap;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final message = tooltip ?? (expanded ? '' : label);
+    final activeBg = colors.primary.withOpacity(0.12);
+    final activeFg = colors.primary;
+    final inactiveFg = colors.onSurfaceVariant;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      child: Tooltip(
+        message: message,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            height: 48,
+            padding: EdgeInsets.symmetric(horizontal: expanded ? 14 : 12),
+            decoration: BoxDecoration(
+              color: selected ? activeBg : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment:
+                  expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+              children: <Widget>[
+                Icon(
+                  icon,
+                  size: 22,
+                  color: selected ? activeFg : inactiveFg,
+                ),
+                if (expanded && label.isNotEmpty) ...<Widget>[
+                  const SizedBox(width: 14),
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: selected ? activeFg : colors.onSurface,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -137,129 +370,69 @@ class _DashboardContent extends StatelessWidget {
   const _DashboardContent({
     required this.snapshot,
     required this.host,
+    required this.refreshIntervalSeconds,
+    required this.splitCellId,
     required this.lastUpdated,
+    required this.section,
+    required this.onRefresh,
+    required this.onHostChanged,
+    required this.onRefreshIntervalChanged,
+    required this.onSplitCellIdChanged,
   });
 
   final RouterSnapshot snapshot;
   final String host;
+  final double refreshIntervalSeconds;
+  final bool splitCellId;
   final DateTime? lastUpdated;
+  final _DashboardSection section;
+  final VoidCallback onRefresh;
+  final ValueChanged<String> onHostChanged;
+  final ValueChanged<double> onRefreshIntervalChanged;
+  final ValueChanged<bool> onSplitCellIdChanged;
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1120),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _Header(
-                host: host,
-                networkType: snapshot.networkType,
-                lastUpdated: lastUpdated,
-              ),
-              const SizedBox(height: 20),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final narrow = constraints.maxWidth < 780;
-                  final cards = <Widget>[
-                    _IdentityCard(snapshot: snapshot),
-                    _WanCard(wan: snapshot.wan),
-                    _SystemCard(system: snapshot.system),
-                  ];
-                  if (narrow) {
-                    return Column(
-                      children: cards
-                          .map(
-                            (card) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: card,
-                            ),
-                          )
-                          .toList(),
-                    );
-                  }
-
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: cards
-                        .map(
-                          (card) => Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 12),
-                              child: card,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  );
-                },
-              ),
-              const SizedBox(height: 20),
-              _SignalTable(metrics: snapshot.metrics),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Header extends StatelessWidget {
-  const _Header({
-    required this.host,
-    required this.networkType,
-    required this.lastUpdated,
-  });
-
-  final String host;
-  final String networkType;
-  final DateTime? lastUpdated;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
+    return Column(
       children: <Widget>[
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primary,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(Icons.cell_tower, color: theme.colorScheme.onPrimary),
+        _StatusBar(
+          host: host,
+          networkType: snapshot.networkType,
+          lastUpdated: lastUpdated,
+          onRefresh: onRefresh,
         ),
-        const SizedBox(width: 16),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'Dialog AirFibre',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(28),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1120),
+                child: Column(
+                  children: <Widget>[
+                    _SectionPage(
+                      section: section,
+                      snapshot: snapshot,
+                      host: host,
+                      refreshIntervalSeconds: refreshIntervalSeconds,
+                      splitCellId: splitCellId,
+                      onHostChanged: onHostChanged,
+                      onRefreshIntervalChanged: onRefreshIntervalChanged,
+                      onSplitCellIdChanged: onSplitCellIdChanged,
+                    ),
+                    const SizedBox(height: 40),
+                    Text(
+                      'CellTuner - v0.0.1',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.3,
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 4),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: <Widget>[
-                  _StatusChip(icon: Icons.router, label: host),
-                  _StatusChip(
-                    icon: Icons.network_cell,
-                    label: networkType.isEmpty ? '-' : networkType,
-                  ),
-                  if (lastUpdated != null)
-                    _StatusChip(
-                      icon: Icons.schedule,
-                      label: _formatClock(lastUpdated!),
-                    ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ],
@@ -267,27 +440,625 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.icon, required this.label});
+class _SectionPage extends StatelessWidget {
+  const _SectionPage({
+    required this.section,
+    required this.snapshot,
+    required this.host,
+    required this.refreshIntervalSeconds,
+    required this.splitCellId,
+    required this.onHostChanged,
+    required this.onRefreshIntervalChanged,
+    required this.onSplitCellIdChanged,
+  });
 
+  final _DashboardSection section;
+  final RouterSnapshot snapshot;
+  final String host;
+  final double refreshIntervalSeconds;
+  final bool splitCellId;
+  final ValueChanged<String> onHostChanged;
+  final ValueChanged<double> onRefreshIntervalChanged;
+  final ValueChanged<bool> onSplitCellIdChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (section) {
+      _DashboardSection.status => _PagePanel(
+          title: 'Status',
+          subtitle: 'Real-time network and cellular metrics',
+          icon: Icons.info_outline,
+          child: _SignalTable(
+            metrics: snapshot.metrics,
+            splitCellId: splitCellId,
+          ),
+        ),
+      _DashboardSection.signal => _PagePanel(
+          title: 'Signal',
+          subtitle: 'Signal tuning and spectrum analysis',
+          icon: Icons.monitor_heart_outlined,
+          child: const _SignalPlaceholder(),
+        ),
+      _DashboardSection.wan => _PagePanel(
+          title: 'WAN',
+          subtitle: 'Internet connection details',
+          icon: Icons.public_outlined,
+          child: _WanCard(wan: snapshot.wan),
+        ),
+      _DashboardSection.system => _PagePanel(
+          title: 'System',
+          subtitle: 'Router runtime and firmware',
+          icon: Icons.memory_outlined,
+          child: _SystemCard(system: snapshot.system),
+        ),
+      _DashboardSection.subscriber => _PagePanel(
+          title: 'Subscriber',
+          subtitle: 'SIM and device identity',
+          icon: Icons.sim_card_outlined,
+          child: _IdentityCard(snapshot: snapshot),
+        ),
+      _DashboardSection.settings => _PagePanel(
+          title: 'Settings',
+          subtitle: 'Configure router IP and dashboard preferences',
+          icon: Icons.settings_outlined,
+          child: _SettingsCard(
+            host: host,
+            refreshIntervalSeconds: refreshIntervalSeconds,
+            splitCellId: splitCellId,
+            onHostChanged: onHostChanged,
+            onRefreshIntervalChanged: onRefreshIntervalChanged,
+            onSplitCellIdChanged: onSplitCellIdChanged,
+          ),
+        ),
+    };
+  }
+}
+
+class _PagePanel extends StatelessWidget {
+  const _PagePanel({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
   final IconData icon;
-  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: colors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 24, color: colors.primary),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        child,
+      ],
+    );
+  }
+}
+
+class _SignalPlaceholder extends StatelessWidget {
+  const _SignalPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(48),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
+        ),
+      ),
+      child: const Center(
+        child: Text(
+          'Signal',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsCard extends StatefulWidget {
+  const _SettingsCard({
+    required this.host,
+    required this.refreshIntervalSeconds,
+    required this.splitCellId,
+    required this.onHostChanged,
+    required this.onRefreshIntervalChanged,
+    required this.onSplitCellIdChanged,
+  });
+
+  final String host;
+  final double refreshIntervalSeconds;
+  final bool splitCellId;
+  final ValueChanged<String> onHostChanged;
+  final ValueChanged<double> onRefreshIntervalChanged;
+  final ValueChanged<bool> onSplitCellIdChanged;
+
+  @override
+  State<_SettingsCard> createState() => _SettingsCardState();
+}
+
+class _SettingsCardState extends State<_SettingsCard> {
+  late final TextEditingController _hostController;
+
+  static const _intervalOptions = <double>[0.25, 0.5, 1.0, 2.0, 5.0, 10.0];
+
+  @override
+  void initState() {
+    super.initState();
+    _hostController = TextEditingController(text: widget.host);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SettingsCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.host != widget.host && _hostController.text != widget.host) {
+      _hostController.text = widget.host;
+    }
+  }
+
+  @override
+  void dispose() {
+    _hostController.dispose();
+    super.dispose();
+  }
+
+  void _saveHost() {
+    final newHost = _hostController.text.trim();
+    if (newHost.isNotEmpty) {
+      widget.onHostChanged(newHost);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Router IP updated to $newHost'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.router_outlined, color: colors.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Router Connection',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Router IP Address',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: colors.onSurface,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Enter the gateway IP address of your LTE/5G router (Default: 192.168.8.1).",
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: TextField(
+                    controller: _hostController,
+                    decoration: InputDecoration(
+                      hintText: '192.168.8.1',
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: colors.outlineVariant,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: colors.outlineVariant.withOpacity(0.6),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: colors.primary,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                    onSubmitted: (_) => _saveHost(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                FilledButton(
+                  onPressed: _saveHost,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: colors.outlineVariant.withOpacity(0.3),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.timer_outlined, color: colors.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Polling & Refresh',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Update Frequency',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: colors.onSurface,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Select how often the dashboard automatically polls the router for metrics (Default: 1s).',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<double>(
+              value: widget.refreshIntervalSeconds,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: colors.outlineVariant,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: colors.outlineVariant.withOpacity(0.6),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: colors.primary,
+                    width: 1.5,
+                  ),
+                ),
+              ),
+              items: _intervalOptions.map((seconds) {
+                final label = seconds < 1 ? '${seconds}s' : '${seconds.toInt()}s';
+                return DropdownMenuItem<double>(
+                  value: seconds,
+                  child: Text(label),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  widget.onRefreshIntervalChanged(val);
+                }
+              },
+            ),
+            const SizedBox(height: 24),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: colors.outlineVariant.withOpacity(0.3),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.tune_outlined, color: colors.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Cell Identity Formatting',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Split Cell ID',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: colors.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Show LTE and 5G Cell ID as eNB/gNB ID–Sector ID.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Switch(
+                  value: widget.splitCellId,
+                  onChanged: widget.onSplitCellIdChanged,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusBar extends StatelessWidget {
+  const _StatusBar({
+    required this.host,
+    required this.networkType,
+    required this.lastUpdated,
+    required this.onRefresh,
+  });
+
+  final String host;
+  final String networkType;
+  final DateTime? lastUpdated;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        color: colors.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: colors.outlineVariant.withOpacity(0.4),
+          ),
+        ),
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 16,
+              runSpacing: 8,
+              children: <Widget>[
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      'Dialog AirFibre',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Connected - $host',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: colors.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                _StatusChip(
+                  icon: Icons.cell_tower_outlined,
+                  label: networkType.isEmpty ? '-' : networkType,
+                  isAccent: networkType.isNotEmpty,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          if (lastUpdated != null) ...<Widget>[
+            Text(
+              _formatClock(lastUpdated!),
+              style: TextStyle(
+                fontSize: 12,
+                color: colors.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 12),
+          ],
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: onRefresh,
+            style: IconButton.styleFrom(
+              backgroundColor: colors.surfaceContainerHighest.withOpacity(0.6),
+              hoverColor: colors.primary.withOpacity(0.1),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+                side: BorderSide(
+                  color: colors.outlineVariant.withOpacity(0.3),
+                ),
+              ),
+            ),
+            icon: Icon(
+              Icons.refresh_rounded,
+              size: 20,
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({
+    required this.icon,
+    required this.label,
+    this.isAccent = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool isAccent;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final bg = isAccent
+        ? colors.primaryContainer.withOpacity(0.4)
+        : colors.surfaceContainerHighest.withOpacity(0.6);
+    final fg = isAccent ? colors.primary : colors.onSurfaceVariant;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isAccent
+              ? colors.primary.withOpacity(0.2)
+              : colors.outlineVariant.withOpacity(0.3),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, size: 16, color: colors.onSurfaceVariant),
+          Icon(icon, size: 14, color: fg),
           const SizedBox(width: 6),
-          Text(label),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: fg,
+            ),
+          ),
         ],
       ),
     );
@@ -295,8 +1066,11 @@ class _StatusChip extends StatelessWidget {
 }
 
 class _InfoCard extends StatelessWidget {
-  const _InfoCard(
-      {required this.title, required this.icon, required this.rows});
+  const _InfoCard({
+    required this.title,
+    required this.icon,
+    required this.rows,
+  });
 
   final String title;
   final IconData icon;
@@ -306,31 +1080,54 @@ class _InfoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: colors.outlineVariant),
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Row(
               children: <Widget>[
-                Icon(icon, color: colors.primary, size: 20),
-                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: colors.primary, size: 18),
+                ),
+                const SizedBox(width: 12),
                 Text(
                   title,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            for (final row in rows) _InfoRow(row: row),
+            const SizedBox(height: 16),
+            for (var i = 0; i < rows.length; i++) ...<Widget>[
+              if (i > 0)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: colors.outlineVariant.withOpacity(0.2),
+                ),
+              _InfoRow(row: rows[i]),
+            ],
           ],
         ),
       ),
@@ -346,17 +1143,19 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final colors = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           SizedBox(
-            width: 116,
+            width: 130,
             child: Text(
               row.label,
               style: textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 13,
+                color: colors.onSurfaceVariant,
               ),
             ),
           ),
@@ -365,7 +1164,9 @@ class _InfoRow extends StatelessWidget {
               row.value.isEmpty ? '-' : row.value,
               textAlign: TextAlign.right,
               style: textTheme.bodyMedium?.copyWith(
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
+                color: colors.onSurface,
               ),
             ),
           ),
@@ -384,7 +1185,7 @@ class _IdentityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _InfoCard(
       title: 'Subscriber',
-      icon: Icons.sim_card,
+      icon: Icons.sim_card_outlined,
       rows: <_InfoRowData>[
         _InfoRowData('IMSI', snapshot.imsi),
         _InfoRowData('IMEI', snapshot.imei),
@@ -402,7 +1203,7 @@ class _WanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _InfoCard(
       title: 'WAN',
-      icon: Icons.public,
+      icon: Icons.public_outlined,
       rows: <_InfoRowData>[
         _InfoRowData('IP Address', wan.ipAddress),
         _InfoRowData('Preferred DNS', wan.preferredDns),
@@ -424,7 +1225,7 @@ class _SystemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _InfoCard(
       title: 'System',
-      icon: Icons.memory,
+      icon: Icons.memory_outlined,
       rows: <_InfoRowData>[
         _InfoRowData('Runtime', system.formattedUptime),
         _InfoRowData('Firmware', system.firmwareVersion),
@@ -434,77 +1235,99 @@ class _SystemCard extends StatelessWidget {
 }
 
 class _SignalTable extends StatelessWidget {
-  const _SignalTable({required this.metrics});
+  const _SignalTable({
+    required this.metrics,
+    this.splitCellId = false,
+  });
 
   final List<RouterMetric> metrics;
+  final bool splitCellId;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: colors.outlineVariant),
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Icon(Icons.monitor_heart, color: colors.primary, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Cellular Signal',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Table(
+          columnWidths: const <int, TableColumnWidth>{
+            0: FlexColumnWidth(1.2),
+            1: FlexColumnWidth(),
+            2: FlexColumnWidth(),
+          },
+          children: <TableRow>[
+            TableRow(
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerHighest.withOpacity(0.6),
+              ),
+              children: const <Widget>[
+                _TableCell('Metric', header: true),
+                _TableCell('4G LTE', header: true),
+                _TableCell('5G NR', header: true),
               ],
             ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Table(
-                columnWidths: const <int, TableColumnWidth>{
-                  0: FlexColumnWidth(1.1),
-                  1: FlexColumnWidth(),
-                  2: FlexColumnWidth(),
-                },
-                children: <TableRow>[
-                  TableRow(
-                    decoration: BoxDecoration(
-                      color: colors.surfaceContainerHighest,
-                    ),
-                    children: const <Widget>[
-                      _TableCell('Metric', header: true),
-                      _TableCell('4G LTE', header: true),
-                      _TableCell('5G NR', header: true),
-                    ],
-                  ),
-                  for (final metric in metrics)
-                    TableRow(
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(color: colors.outlineVariant),
-                        ),
+            for (final metric in metrics) ...<TableRow>[
+              () {
+                final isCellId = metric.label.toLowerCase() == 'cell id';
+                var lteVal = metric.valueFor(CellularLayer.lte);
+                var nr5gVal = metric.valueFor(CellularLayer.nr5g);
+                if (splitCellId && isCellId) {
+                  if (lteVal != '-') {
+                    lteVal = _formatCellIdString(lteVal, is5g: false);
+                  }
+                  if (nr5gVal != '-') {
+                    nr5gVal = _formatCellIdString(nr5gVal, is5g: true);
+                  }
+                }
+                return TableRow(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: colors.outlineVariant.withOpacity(0.2),
                       ),
-                      children: <Widget>[
-                        _TableCell(metric.label),
-                        _TableCell(metric.valueFor(CellularLayer.lte)),
-                        _TableCell(metric.valueFor(CellularLayer.nr5g)),
-                      ],
                     ),
-                ],
-              ),
-            ),
+                  ),
+                  children: <Widget>[
+                    _TableCell(metric.label),
+                    _TableCell(lteVal),
+                    _TableCell(nr5gVal),
+                  ],
+                );
+              }(),
+            ],
           ],
         ),
       ),
     );
+  }
+}
+
+String _formatCellIdString(String raw, {required bool is5g}) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty || trimmed == '-') return raw;
+  final val = int.tryParse(trimmed);
+  if (val == null) return raw;
+  if (!is5g) {
+    final enb = val ~/ 256;
+    final sector = val % 256;
+    return '$enb-$sector';
+  } else {
+    final gnb = val ~/ 16384;
+    final sector = val % 16384;
+    return '$gnb-$sector';
   }
 }
 
@@ -517,10 +1340,12 @@ class _TableCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontSize: header ? 13 : 14,
           fontWeight: header ? FontWeight.w700 : FontWeight.w500,
+          color: header ? Theme.of(context).colorScheme.onSurfaceVariant : null,
         );
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: SelectableText(value, style: style),
     );
   }
@@ -543,23 +1368,37 @@ class _ErrorState extends StatelessWidget {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
-        child: Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(color: theme.colorScheme.outlineVariant),
+        child: Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.4)),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(28),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Icon(
-                  Icons.wifi_off,
-                  size: 48,
-                  color: theme.colorScheme.error,
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.errorContainer.withOpacity(0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.wifi_off_rounded,
+                    size: 36,
+                    color: theme.colorScheme.error,
+                  ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 Text(
                   'Could not reach $host',
                   style: theme.textTheme.titleLarge?.copyWith(
@@ -574,10 +1413,16 @@ class _ErrorState extends StatelessWidget {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
                 FilledButton.icon(
                   onPressed: onRefresh,
-                  icon: const Icon(Icons.refresh),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.refresh_rounded),
                   label: const Text('Refresh'),
                 ),
               ],
