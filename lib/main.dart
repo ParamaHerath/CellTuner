@@ -234,7 +234,6 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
             }
           },
           statusBar: _StatusBar(
-            host: _host,
             networkType: data.networkType,
             metrics: data.metrics,
             lastUpdated: _lastUpdated,
@@ -1871,7 +1870,6 @@ class _SettingsCardState extends State<_SettingsCard> {
 
 class _StatusBar extends StatelessWidget {
   const _StatusBar({
-    required this.host,
     required this.networkType,
     required this.metrics,
     required this.lastUpdated,
@@ -1881,7 +1879,6 @@ class _StatusBar extends StatelessWidget {
     this.menuAnimation,
   });
 
-  final String host;
   final String networkType;
   final List<RouterMetric> metrics;
   final DateTime? lastUpdated;
@@ -1949,44 +1946,24 @@ class _StatusBar extends StatelessWidget {
             const SizedBox(width: 8),
           ],
           Expanded(
-            child: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 16,
-              runSpacing: 8,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 10,
-                      children: <Widget>[
-                        Text(
-                          'Dialog AirFibre',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                        _StatusChip(
-                          signalBars: signalBars,
-                          label: badgeStyle.$1,
-                          backgroundColor: badgeStyle.$2,
-                          foregroundColor: badgeStyle.$3,
-                          borderColor: badgeStyle.$4,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Connected - $host',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: colors.onSurfaceVariant,
-                        fontWeight: FontWeight.w500,
+                Text(
+                  'Dialog AirFibre',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
                       ),
-                    ),
-                  ],
+                ),
+                const SizedBox(height: 4),
+                _StatusChip(
+                  signalBars: signalBars,
+                  label: badgeStyle.$1,
+                  backgroundColor: badgeStyle.$2,
+                  foregroundColor: badgeStyle.$3,
+                  borderColor: badgeStyle.$4,
                 ),
               ],
             ),

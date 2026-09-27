@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cell_tuner/main.dart';
@@ -5,6 +7,14 @@ import 'package:cell_tuner/router/router_snapshot.dart';
 
 void main() {
   testWidgets('shows router signal data', (WidgetTester tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
     await tester.pumpWidget(
       CellTunerApp(snapshotLoader: () async => _sampleSnapshot()),
     );
@@ -12,16 +22,25 @@ void main() {
 
     expect(find.text('CellTuner - v0.0.1'), findsOneWidget);
     expect(find.text('Dialog AirFibre'), findsOneWidget);
-    expect(find.text('Connected - 192.168.8.1'), findsOneWidget);
     expect(find.text('4G LTE'), findsOneWidget);
     expect(find.text('5G NR'), findsOneWidget);
     expect(find.text('-103dBm'), findsOneWidget);
     expect(find.text('-102dBm'), findsOneWidget);
     expect(find.text('WAN'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('navigates between dashboard sections',
       (WidgetTester tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
     await tester.pumpWidget(
       CellTunerApp(snapshotLoader: () async => _sampleSnapshot()),
     );
@@ -46,6 +65,8 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     expect(find.text('Settings'), findsNWidgets(2));
+
+    debugDefaultTargetPlatformOverride = null;
   });
 }
 
