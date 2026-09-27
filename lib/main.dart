@@ -1071,20 +1071,20 @@ class _SignalBarsIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 21,
-      height: 14,
+      width: 18,
+      height: 12,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: List.generate(5, (index) {
           final isActive = index < bars;
-          final height = 6.0 + (index * 2.0);
+          final height = 4.8 + (index * 1.8);
           return Container(
-            width: 3.2,
+            width: 2.8,
             height: height,
             decoration: BoxDecoration(
               color: isActive ? color : color.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(1.5),
+              borderRadius: BorderRadius.circular(1.2),
             ),
           );
         }),
@@ -1153,22 +1153,22 @@ class _StatusChip extends StatelessWidget {
     final border = borderColor ?? colors.outlineVariant.withOpacity(0.3);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           _SignalBarsIcon(bars: signalBars, color: fg),
-          const SizedBox(width: 7),
+          const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
               color: fg,
             ),
           ),
