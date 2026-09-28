@@ -1195,6 +1195,136 @@ class _SignalPage extends StatelessWidget {
   }
 }
 
+class _ChartRange {
+  const _ChartRange(this.minY, this.maxY);
+  final double minY;
+  final double maxY;
+
+  static _ChartRange lerp(_ChartRange a, _ChartRange b, double t) {
+    return _ChartRange(
+      a.minY + (b.minY - a.minY) * t,
+      a.maxY + (b.maxY - a.maxY) * t,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _ChartRange &&
+          runtimeType == other.runtimeType &&
+          minY == other.minY &&
+          maxY == other.maxY;
+
+  @override
+  int get hashCode => Object.hash(minY, maxY);
+}
+
+class _ChartRangeTween extends Tween<_ChartRange> {
+  _ChartRangeTween({super.begin, super.end});
+
+  @override
+  _ChartRange lerp(double t) {
+    final b = begin ?? end ?? const _ChartRange(-100, 0);
+    final e = end ?? begin ?? const _ChartRange(-100, 0);
+    return _ChartRange.lerp(b, e, t);
+  }
+}
+
+_ChartRange _calculateDynamicYRange(
+  String metricKey,
+  List<SignalMetricSample> history,
+  bool show4g,
+  bool show5g,
+) {
+  final allVals = <double>[];
+  for (final sample in history) {
+    if (show4g) {
+      final v = sample.getValue(metricKey, is5g: false);
+      if (v != null) allVals.add(v);
+    }
+    if (show5g) {
+      final v = sample.getValue(metricKey, is5g: true);
+      if (v != null) allVals.add(v);
+    }
+  }
+
+  final key = metricKey.toUpperCase();
+  double minSpan;
+  double hardMin;
+  double hardMax;
+  double fallbackMin;
+  double fallbackMax;
+
+  switch (key) {
+    case 'RSSI':
+      minSpan = 8.0;
+      hardMin = -130.0;
+      hardMax = -20.0;
+      fallbackMin = -105.0;
+      fallbackMax = -65.0;
+      break;
+    case 'RSRP':
+      minSpan = 8.0;
+      hardMin = -145.0;
+      hardMax = -40.0;
+      fallbackMin = -120.0;
+      fallbackMax = -75.0;
+      break;
+    case 'RSRQ':
+      minSpan = 4.0;
+      hardMin = -30.0;
+      hardMax = 5.0;
+      fallbackMin = -20.0;
+      fallbackMax = -5.0;
+      break;
+    case 'SINR':
+      minSpan = 6.0;
+      hardMin = -25.0;
+      hardMax = 45.0;
+      fallbackMin = -5.0;
+      fallbackMax = 25.0;
+      break;
+    default:
+      minSpan = 8.0;
+      hardMin = -150.0;
+      hardMax = 100.0;
+      fallbackMin = -100.0;
+      fallbackMax = 0.0;
+  }
+
+  if (allVals.isEmpty) {
+    return _ChartRange(fallbackMin, fallbackMax);
+  }
+
+  final sampleMin = allVals.reduce((a, b) => a < b ? a : b);
+  final sampleMax = allVals.reduce((a, b) => a > b ? a : b);
+  final rawSpan = sampleMax - sampleMin;
+
+  double targetMin;
+  double targetMax;
+
+  if (rawSpan < minSpan) {
+    final mid = (sampleMin + sampleMax) / 2.0;
+    targetMin = (mid - (minSpan / 2.0)).floorToDouble();
+    targetMax = (mid + (minSpan / 2.0)).ceilToDouble();
+  } else {
+    final padding = (rawSpan * 0.15).clamp(1.5, 6.0);
+    targetMin = (sampleMin - padding).floorToDouble();
+    targetMax = (sampleMax + padding).ceilToDouble();
+  }
+
+  if (targetMax - targetMin < minSpan) {
+    final diff = minSpan - (targetMax - targetMin);
+    targetMin = (targetMin - diff / 2.0).floorToDouble();
+    targetMax = (targetMax + diff / 2.0).ceilToDouble();
+  }
+
+  targetMin = targetMin.clamp(hardMin, hardMax - minSpan);
+  targetMax = targetMax.clamp(targetMin + minSpan, hardMax);
+
+  return _ChartRange(targetMin, targetMax);
+}
+
 class _MetricGraphCard extends StatelessWidget {
   const _MetricGraphCard({
     required this.title,
@@ -1218,6 +1348,7 @@ class _MetricGraphCard extends StatelessWidget {
     final latest = history.isNotEmpty ? history.last : null;
     final lteVal = latest?.getValue(metricKey, is5g: false);
     final nr5gVal = latest?.getValue(metricKey, is5g: true);
+    final targetRange = _calculateDynamicYRange(metricKey, history, show4g, show5g);
 
     return Container(
       decoration: BoxDecoration(
@@ -1297,16 +1428,25 @@ class _MetricGraphCard extends StatelessWidget {
             SizedBox(
               height: 240,
               width: double.infinity,
-              child: CustomPaint(
-                painter: _MetricLineChartPainter(
-                  metricKey: metricKey,
-                  unit: unit,
-                  history: history,
-                  show4g: show4g,
-                  show5g: show5g,
-                  gridColor: colors.outlineVariant.withOpacity(0.3),
-                  labelColor: colors.onSurfaceVariant,
-                ),
+              child: TweenAnimationBuilder<_ChartRange>(
+                tween: _ChartRangeTween(end: targetRange),
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.easeOutCubic,
+                builder: (context, range, child) {
+                  return CustomPaint(
+                    painter: _MetricLineChartPainter(
+                      metricKey: metricKey,
+                      unit: unit,
+                      history: history,
+                      show4g: show4g,
+                      show5g: show5g,
+                      minY: range.minY,
+                      maxY: range.maxY,
+                      gridColor: colors.outlineVariant.withOpacity(0.3),
+                      labelColor: colors.onSurfaceVariant,
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -1323,6 +1463,8 @@ class _MetricLineChartPainter extends CustomPainter {
     required this.history,
     required this.show4g,
     required this.show5g,
+    required this.minY,
+    required this.maxY,
     required this.gridColor,
     required this.labelColor,
   });
@@ -1332,6 +1474,8 @@ class _MetricLineChartPainter extends CustomPainter {
   final List<SignalMetricSample> history;
   final bool show4g;
   final bool show5g;
+  final double minY;
+  final double maxY;
   final Color gridColor;
   final Color labelColor;
 
@@ -1367,56 +1511,7 @@ class _MetricLineChartPainter extends CustomPainter {
       ];
     }
 
-    double defaultMin;
-    double defaultMax;
-    switch (metricKey.toUpperCase()) {
-      case 'RSSI':
-        defaultMin = -110;
-        defaultMax = -40;
-        break;
-      case 'RSRP':
-        defaultMin = -130;
-        defaultMax = -60;
-        break;
-      case 'RSRQ':
-        defaultMin = -24;
-        defaultMax = 0;
-        break;
-      case 'SINR':
-        defaultMin = -10;
-        defaultMax = 30;
-        break;
-      default:
-        defaultMin = -100;
-        defaultMax = 0;
-    }
-
-    double minY = defaultMin;
-    double maxY = defaultMax;
-
-    final allVals = <double>[];
-    for (final s in pointsSource) {
-      if (show4g) {
-        final v = s.getValue(metricKey, is5g: false);
-        if (v != null) allVals.add(v);
-      }
-      if (show5g) {
-        final v = s.getValue(metricKey, is5g: true);
-        if (v != null) allVals.add(v);
-      }
-    }
-
-    if (allVals.isNotEmpty) {
-      final sampleMin = allVals.reduce((a, b) => a < b ? a : b);
-      final sampleMax = allVals.reduce((a, b) => a > b ? a : b);
-      if (sampleMin < minY) minY = (sampleMin - 5).floorToDouble();
-      if (sampleMax > maxY) maxY = (sampleMax + 5).ceilToDouble();
-    }
-
-    if (minY == maxY) {
-      minY -= 5;
-      maxY += 5;
-    }
+    final effectiveSpan = (maxY - minY) <= 0 ? 1.0 : (maxY - minY);
 
     final gridPaint = Paint()
       ..color = gridColor
@@ -1424,14 +1519,16 @@ class _MetricLineChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     const numYDivisions = 3;
+    final isCompactSpan = (maxY - minY) < 4.0;
     for (var i = 0; i <= numYDivisions; i++) {
       final yRatio = i / numYDivisions;
       final y = chartBottom - (yRatio * chartHeight);
       canvas.drawLine(Offset(chartLeft, y), Offset(chartRight, y), gridPaint);
 
       final val = minY + (yRatio * (maxY - minY));
+      final labelText = isCompactSpan ? val.toStringAsFixed(1) : val.round().toString();
       final textSpan = TextSpan(
-        text: val.round().toString(),
+        text: labelText,
         style: TextStyle(fontSize: 10, color: labelColor),
       );
       final tp = TextPainter(
@@ -1473,7 +1570,7 @@ class _MetricLineChartPainter extends CustomPainter {
         final age = now.difference(sample.timestamp).inMilliseconds / 1000.0;
         final x = chartRight - ((age / 60.0) * chartWidth);
         final clampedX = x.clamp(chartLeft, chartRight);
-        final yRatio = (val - minY) / (maxY - minY);
+        final yRatio = (val - minY) / effectiveSpan;
         final y = chartBottom - (yRatio * chartHeight);
         final clampedY = y.clamp(chartTop, chartBottom);
         points.add(Offset(clampedX, clampedY));
@@ -1546,7 +1643,9 @@ class _MetricLineChartPainter extends CustomPainter {
     return oldDelegate.history != history ||
         oldDelegate.show4g != show4g ||
         oldDelegate.show5g != show5g ||
-        oldDelegate.metricKey != metricKey;
+        oldDelegate.metricKey != metricKey ||
+        oldDelegate.minY != minY ||
+        oldDelegate.maxY != maxY;
   }
 }
 
