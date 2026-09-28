@@ -131,7 +131,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
 
   void _recordSignalSnapshot(RouterSnapshot snapshot) {
     final now = DateTime.now();
-    final cutoff = now.subtract(const Duration(seconds: 65));
+    final cutoff = now.subtract(const Duration(minutes: 65));
 
     double? findVal(String key, CellularLayer layer) {
       for (final m in snapshot.metrics) {
@@ -140,6 +140,17 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
           if (raw == '-') return null;
           final match = RegExp(r'(-?\d+(?:\.\d+)?)').firstMatch(raw);
           if (match != null) return double.tryParse(match.group(1)!);
+        }
+      }
+      return null;
+    }
+
+    String? findCellId(CellularLayer layer) {
+      for (final m in snapshot.metrics) {
+        if (m.label.toLowerCase() == 'cell id') {
+          final raw = m.valueFor(layer);
+          if (raw == '-') return null;
+          return raw.trim();
         }
       }
       return null;
@@ -155,6 +166,8 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
       rsrqNr5g: findVal('RSRQ', CellularLayer.nr5g),
       sinrLte: findVal('SINR', CellularLayer.lte),
       sinrNr5g: findVal('SINR', CellularLayer.nr5g),
+      cellIdLte: findCellId(CellularLayer.lte),
+      cellIdNr5g: findCellId(CellularLayer.nr5g),
     ));
 
     _signalHistory.removeWhere((s) => s.timestamp.isBefore(cutoff));
@@ -721,6 +734,7 @@ class _SectionPage extends StatelessWidget {
             snapshot: snapshot,
             selectedMetrics: selectedSignalMetrics,
             techMode: signalTechMode,
+            splitCellId: splitCellId,
           ),
         ),
       _DashboardSection.wan => _PagePanel(
@@ -1062,6 +1076,8 @@ class SignalMetricSample {
     required this.rsrqNr5g,
     required this.sinrLte,
     required this.sinrNr5g,
+    this.cellIdLte,
+    this.cellIdNr5g,
   });
 
   final DateTime timestamp;
@@ -1073,6 +1089,8 @@ class SignalMetricSample {
   final double? rsrqNr5g;
   final double? sinrLte;
   final double? sinrNr5g;
+  final String? cellIdLte;
+  final String? cellIdNr5g;
 
   double? getValue(String key, {required bool is5g}) {
     return switch (key.toUpperCase()) {
@@ -1085,18 +1103,116 @@ class SignalMetricSample {
   }
 }
 
+class TowerHandoffEvent {
+  const TowerHandoffEvent({
+    required this.timestamp,
+    required this.prevLte,
+    required this.newLte,
+    required this.prevNr5g,
+    required this.newNr5g,
+  });
+
+  final DateTime timestamp;
+  final String? prevLte;
+  final String? newLte;
+  final String? prevNr5g;
+  final String? newNr5g;
+
+  String formatChange(bool split) {
+    final lteChanged = prevLte != null &&
+        newLte != null &&
+        prevLte!.isNotEmpty &&
+        newLte!.isNotEmpty &&
+        prevLte != '-' &&
+        newLte != '-' &&
+        prevLte != newLte;
+
+    final nrChanged = prevNr5g != null &&
+        newNr5g != null &&
+        prevNr5g!.isNotEmpty &&
+        newNr5g!.isNotEmpty &&
+        prevNr5g != '-' &&
+        newNr5g != '-' &&
+        prevNr5g != newNr5g;
+
+    if (lteChanged && nrChanged) {
+      final pLte = split ? _formatCellIdString(prevLte!, is5g: false) : prevLte!;
+      final nLte = split ? _formatCellIdString(newLte!, is5g: false) : newLte!;
+      final pNr = split ? _formatCellIdString(prevNr5g!, is5g: true) : prevNr5g!;
+      final nNr = split ? _formatCellIdString(newNr5g!, is5g: true) : newNr5g!;
+      return '$pLte / $pNr → $nLte / $nNr';
+    } else if (lteChanged) {
+      final pLte = split ? _formatCellIdString(prevLte!, is5g: false) : prevLte!;
+      final nLte = split ? _formatCellIdString(newLte!, is5g: false) : newLte!;
+      return '$pLte → $nLte';
+    } else if (nrChanged) {
+      final pNr = split ? _formatCellIdString(prevNr5g!, is5g: true) : prevNr5g!;
+      final nNr = split ? _formatCellIdString(newNr5g!, is5g: true) : newNr5g!;
+      return '$pNr → $nNr';
+    }
+
+    return 'Tower Changed';
+  }
+}
+
+List<TowerHandoffEvent> findHandoffEvents(List<SignalMetricSample> history) {
+  final list = <TowerHandoffEvent>[];
+  if (history.length < 2) return list;
+
+  for (var i = 1; i < history.length; i++) {
+    final prev = history[i - 1];
+    final curr = history[i];
+
+    final lteChanged = prev.cellIdLte != null &&
+        curr.cellIdLte != null &&
+        prev.cellIdLte!.isNotEmpty &&
+        curr.cellIdLte!.isNotEmpty &&
+        prev.cellIdLte != '-' &&
+        curr.cellIdLte != '-' &&
+        prev.cellIdLte != curr.cellIdLte;
+
+    final nrChanged = prev.cellIdNr5g != null &&
+        curr.cellIdNr5g != null &&
+        prev.cellIdNr5g!.isNotEmpty &&
+        curr.cellIdNr5g!.isNotEmpty &&
+        prev.cellIdNr5g != '-' &&
+        curr.cellIdNr5g != '-' &&
+        prev.cellIdNr5g != curr.cellIdNr5g;
+
+    if (lteChanged || nrChanged) {
+      list.add(TowerHandoffEvent(
+        timestamp: curr.timestamp,
+        prevLte: prev.cellIdLte,
+        newLte: curr.cellIdLte,
+        prevNr5g: prev.cellIdNr5g,
+        newNr5g: curr.cellIdNr5g,
+      ));
+    }
+  }
+  return list;
+}
+
+String _formatHandoffTime(DateTime dt) {
+  final h = dt.hour.toString().padLeft(2, '0');
+  final m = dt.minute.toString().padLeft(2, '0');
+  final s = dt.second.toString().padLeft(2, '0');
+  return '$h:$m:$s';
+}
+
 class _SignalPage extends StatelessWidget {
   const _SignalPage({
     required this.history,
     required this.snapshot,
     this.selectedMetrics,
     this.techMode,
+    this.splitCellId = true,
   });
 
   final List<SignalMetricSample> history;
   final RouterSnapshot snapshot;
   final Set<String>? selectedMetrics;
   final String? techMode;
+  final bool splitCellId;
 
   @override
   Widget build(BuildContext context) {
@@ -1104,6 +1220,7 @@ class _SignalPage extends StatelessWidget {
     final mode = techMode ?? 'Both (4G & 5G)';
     final show4g = mode == 'Both (4G & 5G)' || mode == '4G LTE Only';
     final show5g = mode == 'Both (4G & 5G)' || mode == '5G NR Only';
+    final handoffs = findHandoffEvents(history);
 
     const metricConfigs = <(String, String, String)>[
       ('RSSI', 'RSSI (Received Signal Strength)', 'dBm'),
@@ -1157,6 +1274,8 @@ class _SignalPage extends StatelessWidget {
                       history: history,
                       show4g: show4g,
                       show5g: show5g,
+                      splitCellId: splitCellId,
+                      handoffs: handoffs,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -1169,6 +1288,8 @@ class _SignalPage extends StatelessWidget {
                             history: history,
                             show4g: show4g,
                             show5g: show5g,
+                            splitCellId: splitCellId,
+                            handoffs: handoffs,
                           )
                         : const SizedBox.shrink(),
                   ),
@@ -1191,6 +1312,8 @@ class _SignalPage extends StatelessWidget {
                   history: history,
                   show4g: show4g,
                   show5g: show5g,
+                  splitCellId: splitCellId,
+                  handoffs: handoffs,
                 ),
                 if (i < visibleConfigs.length - 1) const SizedBox(height: 16),
               ],
@@ -1340,6 +1463,9 @@ class _MetricGraphCard extends StatelessWidget {
     required this.history,
     required this.show4g,
     required this.show5g,
+    this.splitCellId = true,
+    this.handoffs = const <TowerHandoffEvent>[],
+    this.timeWindowSeconds = 60.0,
   });
 
   final String title;
@@ -1348,6 +1474,9 @@ class _MetricGraphCard extends StatelessWidget {
   final List<SignalMetricSample> history;
   final bool show4g;
   final bool show5g;
+  final bool splitCellId;
+  final List<TowerHandoffEvent> handoffs;
+  final double timeWindowSeconds;
 
   @override
   Widget build(BuildContext context) {
@@ -1440,18 +1569,97 @@ class _MetricGraphCard extends StatelessWidget {
                 duration: const Duration(milliseconds: 600),
                 curve: Curves.easeOutCubic,
                 builder: (context, range, child) {
-                  return CustomPaint(
-                    painter: _MetricLineChartPainter(
-                      metricKey: metricKey,
-                      unit: unit,
-                      history: history,
-                      show4g: show4g,
-                      show5g: show5g,
-                      minY: range.minY,
-                      maxY: range.maxY,
-                      gridColor: colors.outlineVariant.withOpacity(0.3),
-                      labelColor: colors.onSurfaceVariant,
-                    ),
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      const chartLeft = 42.0;
+                      final chartRight = constraints.maxWidth - 15.0;
+                      final chartWidth = chartRight - chartLeft;
+                      final now = history.isNotEmpty ? history.last.timestamp : DateTime.now();
+
+                      final visibleHandoffs = handoffs.where((h) {
+                        final age = now.difference(h.timestamp).inMilliseconds / 1000.0;
+                        return age >= 0 && age <= timeWindowSeconds;
+                      }).toList();
+
+                      return Stack(
+                        children: [
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: _MetricLineChartPainter(
+                                metricKey: metricKey,
+                                unit: unit,
+                                history: history,
+                                show4g: show4g,
+                                show5g: show5g,
+                                minY: range.minY,
+                                maxY: range.maxY,
+                                gridColor: colors.outlineVariant.withOpacity(0.3),
+                                labelColor: colors.onSurfaceVariant,
+                                handoffs: visibleHandoffs,
+                                timeWindowSeconds: timeWindowSeconds,
+                              ),
+                            ),
+                          ),
+                          for (final handoff in visibleHandoffs) ...[
+                            () {
+                              final age = now.difference(handoff.timestamp).inMilliseconds / 1000.0;
+                              final x = chartRight - ((age / timeWindowSeconds) * chartWidth);
+                              if (x < chartLeft || x > chartRight) return const SizedBox.shrink();
+
+                              return Positioned(
+                                left: (x - 14).clamp(0.0, constraints.maxWidth - 28.0),
+                                top: 15,
+                                bottom: 25,
+                                width: 28,
+                                child: Tooltip(
+                                  triggerMode: TooltipTriggerMode.tap,
+                                  preferBelow: false,
+                                  verticalOffset: 12,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: colors.inverseSurface,
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.2),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  richMessage: TextSpan(
+                                    children: [
+                                      TextSpan(
+                                        text: 'Handoff · ${_formatHandoffTime(handoff.timestamp)}\n',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: colors.onInverseSurface,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                      TextSpan(
+                                        text: handoff.formatChange(splitCellId),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: colors.onInverseSurface.withOpacity(0.9),
+                                          letterSpacing: 0.1,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  child: MouseRegion(
+                                    cursor: SystemMouseCursors.click,
+                                    child: Container(color: Colors.transparent),
+                                  ),
+                                ),
+                              );
+                            }(),
+                          ],
+                        ],
+                      );
+                    },
                   );
                 },
               ),
@@ -1474,6 +1682,8 @@ class _MetricLineChartPainter extends CustomPainter {
     required this.maxY,
     required this.gridColor,
     required this.labelColor,
+    this.handoffs = const <TowerHandoffEvent>[],
+    this.timeWindowSeconds = 60.0,
   });
 
   final String metricKey;
@@ -1485,6 +1695,8 @@ class _MetricLineChartPainter extends CustomPainter {
   final double maxY;
   final Color gridColor;
   final Color labelColor;
+  final List<TowerHandoffEvent> handoffs;
+  final double timeWindowSeconds;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1504,7 +1716,7 @@ class _MetricLineChartPainter extends CustomPainter {
       final single = pointsSource.first;
       pointsSource = [
         SignalMetricSample(
-          timestamp: now.subtract(const Duration(seconds: 60)),
+          timestamp: now.subtract(Duration(seconds: timeWindowSeconds.toInt())),
           rssiLte: single.rssiLte,
           rssiNr5g: single.rssiNr5g,
           rsrpLte: single.rsrpLte,
@@ -1513,6 +1725,8 @@ class _MetricLineChartPainter extends CustomPainter {
           rsrqNr5g: single.rsrqNr5g,
           sinrLte: single.sinrLte,
           sinrNr5g: single.sinrNr5g,
+          cellIdLte: single.cellIdLte,
+          cellIdNr5g: single.cellIdNr5g,
         ),
         single,
       ];
@@ -1575,7 +1789,7 @@ class _MetricLineChartPainter extends CustomPainter {
         final val = sample.getValue(metricKey, is5g: is5g);
         if (val == null) continue;
         final age = now.difference(sample.timestamp).inMilliseconds / 1000.0;
-        final x = chartRight - ((age / 60.0) * chartWidth);
+        final x = chartRight - ((age / timeWindowSeconds) * chartWidth);
         final clampedX = x.clamp(chartLeft, chartRight);
         final yRatio = (val - minY) / effectiveSpan;
         final y = chartBottom - (yRatio * chartHeight);
@@ -1643,6 +1857,34 @@ class _MetricLineChartPainter extends CustomPainter {
 
     if (show4g) drawSeries(false, const Color(0xFF00A83B));
     if (show5g) drawSeries(true, const Color(0xFF003BFF));
+
+    final handoffPaint = Paint()
+      ..color = const Color(0xFFF59E0B)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    final handoffPinBg = Paint()..color = const Color(0xFFF59E0B);
+    final handoffPinInner = Paint()..color = Colors.white;
+
+    for (final handoff in handoffs) {
+      final age = now.difference(handoff.timestamp).inMilliseconds / 1000.0;
+      if (age < 0 || age > timeWindowSeconds) continue;
+
+      final x = chartRight - ((age / timeWindowSeconds) * chartWidth);
+      if (x < chartLeft || x > chartRight) continue;
+
+      const dashHeight = 3.0;
+      const dashSpace = 3.0;
+      var y = chartTop + 6.0;
+      while (y < chartBottom) {
+        final nextY = (y + dashHeight).clamp(chartTop, chartBottom);
+        canvas.drawLine(Offset(x, y), Offset(x, nextY), handoffPaint);
+        y += dashHeight + dashSpace;
+      }
+
+      canvas.drawCircle(Offset(x, chartTop + 2.0), 3.5, handoffPinBg);
+      canvas.drawCircle(Offset(x, chartTop + 2.0), 1.5, handoffPinInner);
+    }
   }
 
   @override
@@ -1652,7 +1894,9 @@ class _MetricLineChartPainter extends CustomPainter {
         oldDelegate.show5g != show5g ||
         oldDelegate.metricKey != metricKey ||
         oldDelegate.minY != minY ||
-        oldDelegate.maxY != maxY;
+        oldDelegate.maxY != maxY ||
+        oldDelegate.handoffs != handoffs ||
+        oldDelegate.timeWindowSeconds != timeWindowSeconds;
   }
 }
 

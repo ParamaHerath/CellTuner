@@ -69,6 +69,41 @@ void main() {
 
     debugDefaultTargetPlatformOverride = null;
   });
+
+  test('detects tower handoff events with split and non-split cell id formatting', () {
+    final now = DateTime.now();
+    final sample1 = SignalMetricSample(
+      timestamp: now.subtract(const Duration(seconds: 10)),
+      rssiLte: -70,
+      rssiNr5g: null,
+      rsrpLte: -90,
+      rsrpNr5g: null,
+      rsrqLte: -10,
+      rsrqNr5g: null,
+      sinrLte: 15,
+      sinrNr5g: null,
+      cellIdLte: '5285379',
+      cellIdNr5g: null,
+    );
+    final sample2 = SignalMetricSample(
+      timestamp: now.subtract(const Duration(seconds: 5)),
+      rssiLte: -72,
+      rssiNr5g: null,
+      rsrpLte: -92,
+      rsrpNr5g: null,
+      rsrqLte: -11,
+      rsrqNr5g: null,
+      sinrLte: 14,
+      sinrNr5g: null,
+      cellIdLte: '5285380',
+      cellIdNr5g: null,
+    );
+
+    final handoffs = findHandoffEvents([sample1, sample2]);
+    expect(handoffs.length, 1);
+    expect(handoffs.first.formatChange(false), '5285379 → 5285380');
+    expect(handoffs.first.formatChange(true), '20646-3 → 20646-4');
+  });
 }
 
 RouterSnapshot _sampleSnapshot() {
