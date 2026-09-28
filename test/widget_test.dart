@@ -54,12 +54,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('10.180.12.29'), findsOneWidget);
 
-    await tester.tap(find.text('System'));
+    await tester.tap(find.text('Device'));
     await tester.pumpAndSettle();
     expect(find.text('9.4.6.0'), findsOneWidget);
-
-    await tester.tap(find.text('Subscriber'));
-    await tester.pumpAndSettle();
     expect(find.text('413027083002840'), findsOneWidget);
 
     await tester.tap(find.text('Settings'));

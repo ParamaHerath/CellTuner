@@ -270,7 +270,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
   }
 }
 
-enum _DashboardSection { status, signal, wan, system, subscriber, settings }
+enum _DashboardSection { status, signal, wan, device, settings }
 
 bool _isMobileLayout(BuildContext context) {
   final platform = Theme.of(context).platform;
@@ -412,8 +412,7 @@ class _NavigationSidebar extends StatelessWidget {
     (_DashboardSection.status, 'Status', CupertinoIcons.info),
     (_DashboardSection.signal, 'Signal', CupertinoIcons.waveform_path_ecg),
     (_DashboardSection.wan, 'WAN', CupertinoIcons.globe),
-    (_DashboardSection.system, 'System', CupertinoIcons.desktopcomputer),
-    (_DashboardSection.subscriber, 'Subscriber', CupertinoIcons.person_crop_square),
+    (_DashboardSection.device, 'Device', CupertinoIcons.device_desktop),
   ];
 
   @override
@@ -725,17 +724,11 @@ class _SectionPage extends StatelessWidget {
           icon: CupertinoIcons.globe,
           child: _WanCard(wan: snapshot.wan),
         ),
-      _DashboardSection.system => _PagePanel(
-          title: 'System',
-          subtitle: 'Router runtime and firmware',
-          icon: CupertinoIcons.desktopcomputer,
-          child: _SystemCard(system: snapshot.system),
-        ),
-      _DashboardSection.subscriber => _PagePanel(
-          title: 'Subscriber',
-          subtitle: 'SIM and device identity',
-          icon: CupertinoIcons.person_crop_square,
-          child: _IdentityCard(snapshot: snapshot),
+      _DashboardSection.device => _PagePanel(
+          title: 'Device',
+          subtitle: 'System runtime, firmware and SIM identity',
+          icon: CupertinoIcons.device_desktop,
+          child: _DeviceCard(snapshot: snapshot),
         ),
       _DashboardSection.settings => _PagePanel(
           title: 'Settings',
@@ -2239,8 +2232,8 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({required this.snapshot});
+class _DeviceCard extends StatelessWidget {
+  const _DeviceCard({required this.snapshot});
 
   final RouterSnapshot snapshot;
 
@@ -2248,6 +2241,8 @@ class _IdentityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _InfoCard(
       rows: <_InfoRowData>[
+        _InfoRowData('Runtime', snapshot.system.formattedUptime),
+        _InfoRowData('Firmware', snapshot.system.firmwareVersion),
         _InfoRowData('IMSI', snapshot.imsi),
         _InfoRowData('IMEI', snapshot.imei),
       ],
@@ -2270,22 +2265,6 @@ class _WanCard extends StatelessWidget {
         _InfoRowData('IPv6 Address', wan.ipv6Address),
         _InfoRowData('IPv6 DNS', wan.preferredIpv6Dns),
         _InfoRowData('Backup IPv6', wan.backupIpv6Dns),
-      ],
-    );
-  }
-}
-
-class _SystemCard extends StatelessWidget {
-  const _SystemCard({required this.system});
-
-  final SystemInfo system;
-
-  @override
-  Widget build(BuildContext context) {
-    return _InfoCard(
-      rows: <_InfoRowData>[
-        _InfoRowData('Runtime', system.formattedUptime),
-        _InfoRowData('Firmware', system.firmwareVersion),
       ],
     );
   }
