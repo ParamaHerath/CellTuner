@@ -49,7 +49,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
     with SingleTickerProviderStateMixin {
   String _host = '192.168.8.1';
   double _refreshIntervalSeconds = 1.0;
-  bool _splitCellId = false;
+  bool _splitCellId = true;
 
   late RouterApiClient? _client;
   late Future<RouterSnapshot> _snapshotFuture;
@@ -2130,7 +2130,7 @@ class _StatusBar extends StatelessWidget {
                   ),
                 ),
                 icon: Icon(
-                  LucideIcons.refreshCw,
+                  LucideIcons.rotateCw,
                   size: 13,
                   color: colors.onSurfaceVariant,
                 ),
@@ -2141,8 +2141,8 @@ class _StatusBar extends StatelessWidget {
                     ? 'Last Synced: ${_formatClock(lastUpdated!)}'
                     : '',
                 style: TextStyle(
-                  fontSize: 10,
-                  color: colors.outline,
+                  fontSize: 11,
+                  color: colors.onSurfaceVariant.withOpacity(0.7),
                   fontWeight: FontWeight.w500,
                 ),
               ),
