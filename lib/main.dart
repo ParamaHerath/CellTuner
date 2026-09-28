@@ -56,7 +56,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
   Timer? _refreshTimer;
   DateTime? _lastUpdated;
   _DashboardSection _selectedSection = _DashboardSection.status;
-  bool _sidebarExpanded = true;
+  bool _sidebarExpanded = false;
   bool _mobileSidebarOpen = false;
   late final AnimationController _menuAnimation = AnimationController(
     vsync: this,

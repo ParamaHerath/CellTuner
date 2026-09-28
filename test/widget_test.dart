@@ -46,6 +46,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byType(AnimatedIcon));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Signal'));
     await tester.pumpAndSettle();
     expect(find.text('Signal'), findsAtLeastNWidgets(2));
