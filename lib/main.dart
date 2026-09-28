@@ -66,6 +66,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
   final List<SignalMetricSample> _signalHistory = <SignalMetricSample>[];
   Set<String> _selectedSignalMetrics = <String>{'RSSI', 'RSRP', 'RSRQ', 'SINR'};
   String _signalTechMode = 'Both (4G & 5G)';
+  String _signalTimeWindow = '1min';
 
   RouterSnapshotLoader get _loader =>
       widget.snapshotLoader ?? _client!.fetchSnapshot;
@@ -275,6 +276,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
             signalHistory: _signalHistory,
             selectedSignalMetrics: _selectedSignalMetrics,
             signalTechMode: _signalTechMode,
+            signalTimeWindow: _signalTimeWindow,
             lastUpdated: _lastUpdated,
             section: _selectedSection,
             onRefresh: _refresh,
@@ -286,6 +288,9 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
             },
             onSignalTechModeChanged: (mode) {
               setState(() => _signalTechMode = mode);
+            },
+            onSignalTimeWindowChanged: (window) {
+              setState(() => _signalTimeWindow = window);
             },
           ),
         );
@@ -588,6 +593,7 @@ class _DashboardContent extends StatelessWidget {
     required this.signalHistory,
     required this.selectedSignalMetrics,
     required this.signalTechMode,
+    required this.signalTimeWindow,
     required this.lastUpdated,
     required this.section,
     required this.onRefresh,
@@ -596,6 +602,7 @@ class _DashboardContent extends StatelessWidget {
     required this.onSplitCellIdChanged,
     required this.onSelectedSignalMetricsChanged,
     required this.onSignalTechModeChanged,
+    required this.onSignalTimeWindowChanged,
     this.isMobile = false,
   });
 
@@ -606,6 +613,7 @@ class _DashboardContent extends StatelessWidget {
   final List<SignalMetricSample> signalHistory;
   final Set<String> selectedSignalMetrics;
   final String signalTechMode;
+  final String signalTimeWindow;
   final DateTime? lastUpdated;
   final _DashboardSection section;
   final VoidCallback onRefresh;
@@ -614,6 +622,7 @@ class _DashboardContent extends StatelessWidget {
   final ValueChanged<bool> onSplitCellIdChanged;
   final ValueChanged<Set<String>> onSelectedSignalMetricsChanged;
   final ValueChanged<String> onSignalTechModeChanged;
+  final ValueChanged<String> onSignalTimeWindowChanged;
   final bool isMobile;
 
   @override
@@ -639,11 +648,13 @@ class _DashboardContent extends StatelessWidget {
                 signalHistory: signalHistory,
                 selectedSignalMetrics: selectedSignalMetrics,
                 signalTechMode: signalTechMode,
+                signalTimeWindow: signalTimeWindow,
                 onHostChanged: onHostChanged,
                 onRefreshIntervalChanged: onRefreshIntervalChanged,
                 onSplitCellIdChanged: onSplitCellIdChanged,
                 onSelectedSignalMetricsChanged: onSelectedSignalMetricsChanged,
                 onSignalTechModeChanged: onSignalTechModeChanged,
+                onSignalTimeWindowChanged: onSignalTimeWindowChanged,
               ),
               const SizedBox(height: 40),
               Text(
@@ -673,11 +684,13 @@ class _SectionPage extends StatelessWidget {
     required this.signalHistory,
     required this.selectedSignalMetrics,
     required this.signalTechMode,
+    required this.signalTimeWindow,
     required this.onHostChanged,
     required this.onRefreshIntervalChanged,
     required this.onSplitCellIdChanged,
     required this.onSelectedSignalMetricsChanged,
     required this.onSignalTechModeChanged,
+    required this.onSignalTimeWindowChanged,
   });
 
   final _DashboardSection section;
@@ -688,11 +701,13 @@ class _SectionPage extends StatelessWidget {
   final List<SignalMetricSample> signalHistory;
   final Set<String> selectedSignalMetrics;
   final String signalTechMode;
+  final String signalTimeWindow;
   final ValueChanged<String> onHostChanged;
   final ValueChanged<double> onRefreshIntervalChanged;
   final ValueChanged<bool> onSplitCellIdChanged;
   final ValueChanged<Set<String>> onSelectedSignalMetricsChanged;
   final ValueChanged<String> onSignalTechModeChanged;
+  final ValueChanged<String> onSignalTimeWindowChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -727,6 +742,10 @@ class _SectionPage extends StatelessWidget {
                 mode: signalTechMode,
                 onChanged: onSignalTechModeChanged,
               ),
+              _TimeWindowDropdown(
+                selectedWindow: signalTimeWindow,
+                onChanged: onSignalTimeWindowChanged,
+              ),
             ],
           ),
           child: _SignalPage(
@@ -735,6 +754,7 @@ class _SectionPage extends StatelessWidget {
             selectedMetrics: selectedSignalMetrics,
             techMode: signalTechMode,
             splitCellId: splitCellId,
+            timeWindow: signalTimeWindow,
           ),
         ),
       _DashboardSection.wan => _PagePanel(
@@ -789,7 +809,7 @@ class _PagePanel extends StatelessWidget {
       children: <Widget>[
         LayoutBuilder(
           builder: (context, constraints) {
-            final isNarrow = constraints.maxWidth < 640;
+            final isNarrow = constraints.maxWidth < 1000;
             if (isNarrow && headerActions != null) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1065,6 +1085,64 @@ class _TechModeDropdown extends StatelessWidget {
   }
 }
 
+double parseTimeWindowSeconds(String window) {
+  return switch (window) {
+    '1min' => 60.0,
+    '2min' => 120.0,
+    '5min' => 300.0,
+    '15min' => 900.0,
+    '30min' => 1800.0,
+    '1hr' => 3600.0,
+    _ => 60.0,
+  };
+}
+
+class _TimeWindowDropdown extends StatelessWidget {
+  const _TimeWindowDropdown({
+    required this.selectedWindow,
+    required this.onChanged,
+  });
+
+  final String selectedWindow;
+  final ValueChanged<String> onChanged;
+
+  static const options = <String>['1min', '2min', '5min', '15min', '30min', '1hr'];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selectedWindow,
+          isDense: true,
+          icon: const Icon(LucideIcons.chevronDown, size: 13),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: colors.onSurface,
+          ),
+          items: options.map((opt) {
+            return DropdownMenuItem<String>(
+              value: opt,
+              child: Text(opt),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) onChanged(val);
+          },
+        ),
+      ),
+    );
+  }
+}
+
 class SignalMetricSample {
   const SignalMetricSample({
     required this.timestamp,
@@ -1206,6 +1284,7 @@ class _SignalPage extends StatelessWidget {
     this.selectedMetrics,
     this.techMode,
     this.splitCellId = true,
+    this.timeWindow = '1min',
   });
 
   final List<SignalMetricSample> history;
@@ -1213,6 +1292,7 @@ class _SignalPage extends StatelessWidget {
   final Set<String>? selectedMetrics;
   final String? techMode;
   final bool splitCellId;
+  final String timeWindow;
 
   @override
   Widget build(BuildContext context) {
@@ -1220,6 +1300,7 @@ class _SignalPage extends StatelessWidget {
     final mode = techMode ?? 'Both (4G & 5G)';
     final show4g = mode == 'Both (4G & 5G)' || mode == '4G LTE Only';
     final show5g = mode == 'Both (4G & 5G)' || mode == '5G NR Only';
+    final timeWindowSeconds = parseTimeWindowSeconds(timeWindow);
     final handoffs = findHandoffEvents(history);
 
     const metricConfigs = <(String, String, String)>[
@@ -1276,6 +1357,7 @@ class _SignalPage extends StatelessWidget {
                       show5g: show5g,
                       splitCellId: splitCellId,
                       handoffs: handoffs,
+                      timeWindowSeconds: timeWindowSeconds,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -1290,6 +1372,7 @@ class _SignalPage extends StatelessWidget {
                             show5g: show5g,
                             splitCellId: splitCellId,
                             handoffs: handoffs,
+                            timeWindowSeconds: timeWindowSeconds,
                           )
                         : const SizedBox.shrink(),
                   ),
@@ -1314,6 +1397,7 @@ class _SignalPage extends StatelessWidget {
                   show5g: show5g,
                   splitCellId: splitCellId,
                   handoffs: handoffs,
+                  timeWindowSeconds: timeWindowSeconds,
                 ),
                 if (i < visibleConfigs.length - 1) const SizedBox(height: 16),
               ],
@@ -1364,10 +1448,15 @@ _ChartRange _calculateDynamicYRange(
   String metricKey,
   List<SignalMetricSample> history,
   bool show4g,
-  bool show5g,
-) {
+  bool show5g, {
+  double timeWindowSeconds = 60.0,
+}) {
+  final now = history.isNotEmpty ? history.last.timestamp : DateTime.now();
+  final windowCutoff = now.subtract(Duration(seconds: timeWindowSeconds.toInt()));
+
   final allVals = <double>[];
   for (final sample in history) {
+    if (sample.timestamp.isBefore(windowCutoff)) continue;
     if (show4g) {
       final v = sample.getValue(metricKey, is5g: false);
       if (v != null) allVals.add(v);
@@ -1484,7 +1573,13 @@ class _MetricGraphCard extends StatelessWidget {
     final latest = history.isNotEmpty ? history.last : null;
     final lteVal = latest?.getValue(metricKey, is5g: false);
     final nr5gVal = latest?.getValue(metricKey, is5g: true);
-    final targetRange = _calculateDynamicYRange(metricKey, history, show4g, show5g);
+    final targetRange = _calculateDynamicYRange(
+      metricKey,
+      history,
+      show4g,
+      show5g,
+      timeWindowSeconds: timeWindowSeconds,
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -1671,6 +1766,22 @@ class _MetricGraphCard extends StatelessWidget {
   }
 }
 
+String formatXAxisLabel(double ageSeconds, double totalWindowSeconds) {
+  if (ageSeconds <= 0) return 'Now';
+  final rounded = ageSeconds.round();
+  if (totalWindowSeconds <= 60 && rounded <= 60) return '-${rounded}s';
+  if (rounded < 60) return '-${rounded}s';
+  if (rounded < 3600) {
+    if (rounded % 60 == 0) return '-${rounded ~/ 60}m';
+    return '-${rounded ~/ 60}m ${(rounded % 60)}s';
+  }
+  if (rounded % 3600 == 0) return '-${rounded ~/ 3600}h';
+  final hrs = rounded ~/ 3600;
+  final mins = (rounded % 3600) ~/ 60;
+  if (mins == 0) return '-${hrs}h';
+  return '-${hrs}h ${mins}m';
+}
+
 class _MetricLineChartPainter extends CustomPainter {
   _MetricLineChartPainter({
     required this.metricKey,
@@ -1710,8 +1821,9 @@ class _MetricLineChartPainter extends CustomPainter {
     if (chartWidth <= 0 || chartHeight <= 0) return;
 
     final now = history.isNotEmpty ? history.last.timestamp : DateTime.now();
+    final windowCutoff = now.subtract(Duration(seconds: timeWindowSeconds.toInt() + 5));
 
-    var pointsSource = history;
+    var pointsSource = history.where((s) => !s.timestamp.isBefore(windowCutoff)).toList();
     if (pointsSource.length == 1) {
       final single = pointsSource.first;
       pointsSource = [
@@ -1760,10 +1872,10 @@ class _MetricLineChartPainter extends CustomPainter {
     }
 
     final xLabels = <(double, String)>[
-      (0.0, '-60s'),
-      (0.25, '-45s'),
-      (0.5, '-30s'),
-      (0.75, '-15s'),
+      (0.0, formatXAxisLabel(timeWindowSeconds, timeWindowSeconds)),
+      (0.25, formatXAxisLabel(timeWindowSeconds * 0.75, timeWindowSeconds)),
+      (0.5, formatXAxisLabel(timeWindowSeconds * 0.5, timeWindowSeconds)),
+      (0.75, formatXAxisLabel(timeWindowSeconds * 0.25, timeWindowSeconds)),
       (1.0, 'Now'),
     ];
 

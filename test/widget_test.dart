@@ -104,6 +104,70 @@ void main() {
     expect(handoffs.first.formatChange(false), '5285379 → 5285380');
     expect(handoffs.first.formatChange(true), '20646-3 → 20646-4');
   });
+
+  test('formats graph x-axis labels correctly for different time windows', () {
+    expect(formatXAxisLabel(60, 60), '-60s');
+    expect(formatXAxisLabel(30, 60), '-30s');
+    expect(formatXAxisLabel(0, 60), 'Now');
+
+    expect(formatXAxisLabel(120, 120), '-2m');
+    expect(formatXAxisLabel(90, 120), '-1m 30s');
+    expect(formatXAxisLabel(60, 120), '-1m');
+
+    expect(formatXAxisLabel(300, 300), '-5m');
+    expect(formatXAxisLabel(150, 300), '-2m 30s');
+
+    expect(formatXAxisLabel(900, 900), '-15m');
+    expect(formatXAxisLabel(1800, 1800), '-30m');
+
+    expect(formatXAxisLabel(3600, 3600), '-1h');
+    expect(formatXAxisLabel(2700, 3600), '-45m');
+  });
+
+  testWidgets('displays time window dropdown and changes selected window',
+      (WidgetTester tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      CellTunerApp(snapshotLoader: () async => _sampleSnapshot()),
+    );
+    await tester.pumpAndSettle();
+
+    // Open sidebar and navigate to Signal page
+    await tester.tap(find.byType(AnimatedIcon));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Signal'));
+    await tester.pumpAndSettle();
+
+    // Check time window dropdown is present with default '1min'
+    expect(find.text('1min'), findsOneWidget);
+
+    // Tap the dropdown to open it
+    await tester.tap(find.text('1min'));
+    await tester.pumpAndSettle();
+
+    // Verify options are present
+    expect(find.text('2min'), findsOneWidget);
+    expect(find.text('5min'), findsOneWidget);
+    expect(find.text('15min'), findsOneWidget);
+    expect(find.text('30min'), findsOneWidget);
+    expect(find.text('1hr'), findsOneWidget);
+
+    // Select 5min
+    await tester.tap(find.text('5min').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('5min'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+  });
 }
 
 RouterSnapshot _sampleSnapshot() {
