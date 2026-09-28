@@ -447,6 +447,7 @@ class _NavigationSidebar extends StatelessWidget {
               label: item.$2,
               selected: selectedSection == item.$1,
               expanded: isMobile ? true : expanded,
+              isMobile: isMobile,
               onTap: () => onSectionSelected(item.$1),
             ),
           const Spacer(),
@@ -455,6 +456,7 @@ class _NavigationSidebar extends StatelessWidget {
             label: 'Settings',
             selected: selectedSection == _DashboardSection.settings,
             expanded: isMobile ? true : expanded,
+            isMobile: isMobile,
             onTap: () => onSectionSelected(_DashboardSection.settings),
           ),
           const SizedBox(height: 8),
@@ -471,6 +473,7 @@ class _NavigationItem extends StatelessWidget {
     required this.selected,
     required this.expanded,
     required this.onTap,
+    this.isMobile = false,
     this.tooltip,
   });
 
@@ -478,6 +481,7 @@ class _NavigationItem extends StatelessWidget {
   final String label;
   final bool selected;
   final bool expanded;
+  final bool isMobile;
   final VoidCallback onTap;
   final String? tooltip;
 
@@ -485,49 +489,52 @@ class _NavigationItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final message = tooltip ?? (expanded ? '' : label);
-    final activeBg = colors.primary.withOpacity(0.12);
-    final activeFg = colors.primary;
-    final inactiveFg = colors.onSurfaceVariant;
+    final activeBg = colors.onSurface.withOpacity(0.08);
+    final hoverBg = colors.onSurface.withOpacity(0.04);
+    final fg = colors.onSurface;
+    final iconWidth = isMobile ? 48.0 : 75.0;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      child: Tooltip(
-        message: message,
+    return Tooltip(
+      message: message,
+      child: Material(
+        color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(8),
           onTap: onTap,
+          hoverColor: hoverBg,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             height: 48,
             decoration: BoxDecoration(
               color: selected ? activeBg : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
             ),
-            child: Row(
+            child: Stack(
               children: <Widget>[
-                const SizedBox(width: 4),
-                SizedBox(
-                  width: 48,
-                  height: 48,
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: iconWidth,
                   child: Center(
                     child: Icon(
                       icon,
                       size: 22,
-                      color: selected ? activeFg : inactiveFg,
+                      color: selected ? fg : colors.onSurfaceVariant,
                     ),
                   ),
                 ),
                 if (label.isNotEmpty)
-                  Expanded(
+                  Positioned(
+                    left: iconWidth,
+                    top: 0,
+                    bottom: 0,
+                    right: 0,
                     child: ClipRect(
-                      child: OverflowBox(
-                        alignment: Alignment.centerLeft,
-                        minWidth: 0,
-                        maxWidth: 160,
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 180),
-                          opacity: expanded ? 1.0 : 0.0,
-                          curve: Curves.easeInOut,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 180),
+                        opacity: expanded ? 1.0 : 0.0,
+                        curve: Curves.easeInOut,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
                           child: Padding(
                             padding: const EdgeInsets.only(left: 6, right: 12),
                             child: Text(
@@ -537,7 +544,7 @@ class _NavigationItem extends StatelessWidget {
                               overflow: TextOverflow.clip,
                               style: TextStyle(
                                 fontSize: 14,
-                                color: selected ? activeFg : colors.onSurface,
+                                color: fg,
                                 fontWeight: selected
                                     ? FontWeight.w700
                                     : FontWeight.w500,
