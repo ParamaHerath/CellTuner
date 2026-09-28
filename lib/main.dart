@@ -58,9 +58,10 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
   _DashboardSection _selectedSection = _DashboardSection.status;
   bool _sidebarExpanded = true;
   bool _mobileSidebarOpen = false;
-  late final AnimationController _mobileMenuAnimation = AnimationController(
+  late final AnimationController _menuAnimation = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 250),
+    value: _sidebarExpanded ? 1.0 : 0.0,
   );
   final List<SignalMetricSample> _signalHistory = <SignalMetricSample>[];
   Set<String> _selectedSignalMetrics = <String>{'RSSI', 'RSRP', 'RSRQ', 'SINR'};
@@ -92,18 +93,27 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
   @override
   void dispose() {
     _refreshTimer?.cancel();
-    _mobileMenuAnimation.dispose();
+    _menuAnimation.dispose();
     _client?.close();
     super.dispose();
   }
 
-  void _toggleMobileSidebar() {
+  void _toggleSidebar(bool isMobile) {
     setState(() {
-      _mobileSidebarOpen = !_mobileSidebarOpen;
-      if (_mobileSidebarOpen) {
-        _mobileMenuAnimation.forward();
+      if (isMobile) {
+        _mobileSidebarOpen = !_mobileSidebarOpen;
+        if (_mobileSidebarOpen) {
+          _menuAnimation.forward();
+        } else {
+          _menuAnimation.reverse();
+        }
       } else {
-        _mobileMenuAnimation.reverse();
+        _sidebarExpanded = !_sidebarExpanded;
+        if (_sidebarExpanded) {
+          _menuAnimation.forward();
+        } else {
+          _menuAnimation.reverse();
+        }
       }
     });
   }
@@ -212,35 +222,35 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
 
         final data = snapshot.requireData;
         final isMobile = _isMobileLayout(context);
+        final isExpanded = isMobile ? _mobileSidebarOpen : _sidebarExpanded;
+        if (!_menuAnimation.isAnimating &&
+            _menuAnimation.value != (isExpanded ? 1.0 : 0.0)) {
+          _menuAnimation.value = isExpanded ? 1.0 : 0.0;
+        }
+
         return _DashboardShell(
           selectedSection: _selectedSection,
           sidebarExpanded: _sidebarExpanded,
           isMobile: isMobile,
-          menuAnimation: _mobileMenuAnimation,
+          menuAnimation: _menuAnimation,
           onSectionSelected: (section) {
             setState(() {
               _selectedSection = section;
               if (isMobile && _mobileSidebarOpen) {
                 _mobileSidebarOpen = false;
-                _mobileMenuAnimation.reverse();
+                _menuAnimation.reverse();
               }
             });
           },
-          onToggleSidebar: () {
-            if (isMobile) {
-              _toggleMobileSidebar();
-            } else {
-              setState(() => _sidebarExpanded = !_sidebarExpanded);
-            }
-          },
+          onToggleSidebar: () => _toggleSidebar(isMobile),
           statusBar: _StatusBar(
             networkType: data.networkType,
             metrics: data.metrics,
             lastUpdated: _lastUpdated,
             onRefresh: _refresh,
             isMobile: isMobile,
-            onToggleSidebar: _toggleMobileSidebar,
-            menuAnimation: _mobileMenuAnimation,
+            onToggleSidebar: () => _toggleSidebar(isMobile),
+            menuAnimation: _menuAnimation,
           ),
           child: _DashboardContent(
             isMobile: isMobile,
@@ -365,7 +375,6 @@ class _DashboardShell extends StatelessWidget {
                                     expanded: true,
                                     isMobile: true,
                                     onSectionSelected: onSectionSelected,
-                                    onToggle: onToggleSidebar,
                                   ),
                                 ),
                               ),
@@ -379,7 +388,6 @@ class _DashboardShell extends StatelessWidget {
                             expanded: sidebarExpanded,
                             isMobile: false,
                             onSectionSelected: onSectionSelected,
-                            onToggle: onToggleSidebar,
                           ),
                           Expanded(child: child),
                         ],
@@ -398,14 +406,12 @@ class _NavigationSidebar extends StatelessWidget {
     required this.selectedSection,
     required this.expanded,
     required this.onSectionSelected,
-    required this.onToggle,
     this.isMobile = false,
   });
 
   final _DashboardSection selectedSection;
   final bool expanded;
   final ValueChanged<_DashboardSection> onSectionSelected;
-  final VoidCallback onToggle;
   final bool isMobile;
 
   static const _items = <(_DashboardSection, String, IconData)>[
@@ -434,15 +440,6 @@ class _NavigationSidebar extends StatelessWidget {
       child: Column(
         children: <Widget>[
           const SizedBox(height: 8),
-          if (!isMobile)
-            _NavigationItem(
-              icon: CupertinoIcons.bars,
-              label: '',
-              selected: false,
-              expanded: expanded,
-              onTap: onToggle,
-              tooltip: expanded ? 'Collapse navigation' : 'Expand navigation',
-            ),
           for (final item in _items)
             _NavigationItem(
               icon: item.$3,
@@ -1913,7 +1910,7 @@ class _StatusBar extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.fromLTRB(
-          isMobile ? 12 : 24, 12, isMobile ? 12 : 20, 12),
+          isMobile ? 12 : 16, 12, isMobile ? 12 : 20, 12),
       decoration: BoxDecoration(
         color: colors.surface,
         border: Border(
@@ -1924,29 +1921,27 @@ class _StatusBar extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          if (isMobile) ...<Widget>[
-            IconButton(
-              tooltip: (menuAnimation?.value ?? 0) > 0.5
-                  ? 'Close navigation'
-                  : 'Open navigation',
-              onPressed: onToggleSidebar,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              style: IconButton.styleFrom(
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                padding: const EdgeInsets.all(4),
-                hoverColor: colors.primary.withOpacity(0.08),
-                highlightColor: Colors.transparent,
-              ),
-              icon: AnimatedIcon(
-                icon: AnimatedIcons.menu_close,
-                progress: menuAnimation ?? const AlwaysStoppedAnimation(0.0),
-                size: 22,
-                color: colors.onSurface,
-              ),
+          IconButton(
+            tooltip: (menuAnimation?.value ?? 0) > 0.5
+                ? (isMobile ? 'Close navigation' : 'Collapse navigation')
+                : (isMobile ? 'Open navigation' : 'Expand navigation'),
+            onPressed: onToggleSidebar,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.all(4),
+              hoverColor: colors.primary.withOpacity(0.08),
+              highlightColor: Colors.transparent,
             ),
-            const SizedBox(width: 8),
-          ],
+            icon: AnimatedIcon(
+              icon: AnimatedIcons.menu_close,
+              progress: menuAnimation ?? const AlwaysStoppedAnimation(0.0),
+              size: 22,
+              color: colors.onSurface,
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
