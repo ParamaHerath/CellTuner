@@ -244,6 +244,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
           },
           onToggleSidebar: () => _toggleSidebar(isMobile),
           statusBar: _StatusBar(
+            host: _host,
             networkType: data.networkType,
             metrics: data.metrics,
             lastUpdated: _lastUpdated,
@@ -1869,6 +1870,7 @@ class _SettingsCardState extends State<_SettingsCard> {
 
 class _StatusBar extends StatelessWidget {
   const _StatusBar({
+    required this.host,
     required this.networkType,
     required this.metrics,
     required this.lastUpdated,
@@ -1878,6 +1880,7 @@ class _StatusBar extends StatelessWidget {
     this.menuAnimation,
   });
 
+  final String host;
   final String networkType;
   final List<RouterMetric> metrics;
   final DateTime? lastUpdated;
@@ -1977,6 +1980,23 @@ class _StatusBar extends StatelessWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: 3),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    const _BreathingDot(),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Router Connected @ $host',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: colors.onSurfaceVariant.withOpacity(0.7),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -2024,6 +2044,75 @@ class _StatusBar extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _BreathingDot extends StatefulWidget {
+  const _BreathingDot({
+    this.color = const Color(0xFF10B981),
+    this.size = 6.0,
+  });
+
+  final Color color;
+  final double size;
+
+  @override
+  State<_BreathingDot> createState() => _BreathingDotState();
+}
+
+class _BreathingDotState extends State<_BreathingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  );
+
+  late final Animation<double> _animation = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeInOut,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    final isTest =
+        WidgetsBinding.instance.runtimeType.toString().contains('Test');
+    if (!isTest) {
+      _controller.repeat(reverse: true);
+    } else {
+      _controller.value = 1.0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, _) {
+        final val = _animation.value;
+        return Container(
+          width: widget.size,
+          height: widget.size,
+          decoration: BoxDecoration(
+            color: widget.color.withOpacity(0.5 + 0.5 * val),
+            shape: BoxShape.circle,
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: widget.color.withOpacity(0.2 + 0.4 * val),
+                blurRadius: 3 + 3 * val,
+                spreadRadius: 0.5 * val,
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
