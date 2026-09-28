@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'router/router_api_client.dart';
 import 'router/router_snapshot.dart';
@@ -45,17 +45,24 @@ class RouterDashboardScreen extends StatefulWidget {
   State<RouterDashboardScreen> createState() => _RouterDashboardScreenState();
 }
 
-class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
+class _RouterDashboardScreenState extends State<RouterDashboardScreen>
+    with SingleTickerProviderStateMixin {
   String _host = '192.168.8.1';
   double _refreshIntervalSeconds = 1.0;
-  bool _splitCellId = false;
+  bool _splitCellId = true;
 
   late RouterApiClient? _client;
   late Future<RouterSnapshot> _snapshotFuture;
   Timer? _refreshTimer;
   DateTime? _lastUpdated;
   _DashboardSection _selectedSection = _DashboardSection.status;
-  bool _sidebarExpanded = true;
+  bool _sidebarExpanded = false;
+  bool _mobileSidebarOpen = false;
+  late final AnimationController _menuAnimation = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 250),
+    value: _sidebarExpanded ? 1.0 : 0.0,
+  );
   final List<SignalMetricSample> _signalHistory = <SignalMetricSample>[];
   Set<String> _selectedSignalMetrics = <String>{'RSSI', 'RSRP', 'RSRQ', 'SINR'};
   String _signalTechMode = 'Both (4G & 5G)';
@@ -86,8 +93,29 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _menuAnimation.dispose();
     _client?.close();
     super.dispose();
+  }
+
+  void _toggleSidebar(bool isMobile) {
+    setState(() {
+      if (isMobile) {
+        _mobileSidebarOpen = !_mobileSidebarOpen;
+        if (_mobileSidebarOpen) {
+          _menuAnimation.forward();
+        } else {
+          _menuAnimation.reverse();
+        }
+      } else {
+        _sidebarExpanded = !_sidebarExpanded;
+        if (_sidebarExpanded) {
+          _menuAnimation.forward();
+        } else {
+          _menuAnimation.reverse();
+        }
+      }
+    });
   }
 
   Future<RouterSnapshot> _loadSnapshot() async {
@@ -103,7 +131,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
 
   void _recordSignalSnapshot(RouterSnapshot snapshot) {
     final now = DateTime.now();
-    final cutoff = now.subtract(const Duration(seconds: 32));
+    final cutoff = now.subtract(const Duration(seconds: 65));
 
     double? findVal(String key, CellularLayer layer) {
       for (final m in snapshot.metrics) {
@@ -193,23 +221,40 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
         }
 
         final data = snapshot.requireData;
+        final isMobile = _isMobileLayout(context);
+        final isExpanded = isMobile ? _mobileSidebarOpen : _sidebarExpanded;
+        if (!_menuAnimation.isAnimating &&
+            _menuAnimation.value != (isExpanded ? 1.0 : 0.0)) {
+          _menuAnimation.value = isExpanded ? 1.0 : 0.0;
+        }
+
         return _DashboardShell(
           selectedSection: _selectedSection,
           sidebarExpanded: _sidebarExpanded,
+          isMobile: isMobile,
+          menuAnimation: _menuAnimation,
           onSectionSelected: (section) {
-            setState(() => _selectedSection = section);
+            setState(() {
+              _selectedSection = section;
+              if (isMobile && _mobileSidebarOpen) {
+                _mobileSidebarOpen = false;
+                _menuAnimation.reverse();
+              }
+            });
           },
-          onToggleSidebar: () {
-            setState(() => _sidebarExpanded = !_sidebarExpanded);
-          },
+          onToggleSidebar: () => _toggleSidebar(isMobile),
           statusBar: _StatusBar(
             host: _host,
             networkType: data.networkType,
             metrics: data.metrics,
             lastUpdated: _lastUpdated,
             onRefresh: _refresh,
+            isMobile: isMobile,
+            onToggleSidebar: () => _toggleSidebar(isMobile),
+            menuAnimation: _menuAnimation,
           ),
           child: _DashboardContent(
+            isMobile: isMobile,
             snapshot: data,
             host: _host,
             refreshIntervalSeconds: _refreshIntervalSeconds,
@@ -236,7 +281,14 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen> {
   }
 }
 
-enum _DashboardSection { status, signal, wan, system, subscriber, settings }
+enum _DashboardSection { status, signal, wan, device, settings }
+
+bool _isMobileLayout(BuildContext context) {
+  final platform = Theme.of(context).platform;
+  final isMobilePlatform =
+      platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+  return isMobilePlatform || MediaQuery.sizeOf(context).width < 600;
+}
 
 class _DashboardShell extends StatelessWidget {
   const _DashboardShell({
@@ -246,6 +298,8 @@ class _DashboardShell extends StatelessWidget {
     required this.onToggleSidebar,
     required this.statusBar,
     required this.child,
+    this.isMobile = false,
+    this.menuAnimation,
   });
 
   final _DashboardSection selectedSection;
@@ -254,28 +308,91 @@ class _DashboardShell extends StatelessWidget {
   final VoidCallback onToggleSidebar;
   final Widget statusBar;
   final Widget child;
+  final bool isMobile;
+  final Animation<double>? menuAnimation;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 535, minHeight: 500),
+          constraints: BoxConstraints(
+            minWidth: isMobile ? 0 : 535,
+            minHeight: isMobile ? 0 : 500,
+          ),
           child: Column(
             children: <Widget>[
               statusBar,
               Expanded(
-                child: Row(
-                  children: <Widget>[
-                    _NavigationSidebar(
-                      selectedSection: selectedSection,
-                      expanded: sidebarExpanded,
-                      onSectionSelected: onSectionSelected,
-                      onToggle: onToggleSidebar,
-                    ),
-                    Expanded(child: child),
-                  ],
-                ),
+                child: isMobile
+                    ? Stack(
+                        children: <Widget>[
+                          Positioned.fill(child: child),
+                          if (menuAnimation != null)
+                            Positioned.fill(
+                              child: AnimatedBuilder(
+                                animation: menuAnimation!,
+                                builder: (context, _) {
+                                  if (menuAnimation!.value == 0.0) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return GestureDetector(
+                                    onTap: onToggleSidebar,
+                                    behavior: HitTestBehavior.opaque,
+                                    child: Container(
+                                      color: Colors.black.withOpacity(
+                                        0.35 * menuAnimation!.value,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          if (menuAnimation != null)
+                            Positioned(
+                              left: 0,
+                              top: 0,
+                              bottom: 0,
+                              width: 250,
+                              child: AnimatedBuilder(
+                                animation: menuAnimation!,
+                                builder: (context, sidebarWidget) {
+                                  if (menuAnimation!.value == 0.0) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return FractionalTranslation(
+                                    translation: Offset(
+                                      menuAnimation!.value - 1.0,
+                                      0,
+                                    ),
+                                    child: sidebarWidget,
+                                  );
+                                },
+                                child: Material(
+                                  elevation: 8,
+                                  shadowColor: Colors.black45,
+                                  child: _NavigationSidebar(
+                                    selectedSection: selectedSection,
+                                    expanded: true,
+                                    isMobile: true,
+                                    onSectionSelected: onSectionSelected,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      )
+                    : Row(
+                        children: <Widget>[
+                          _NavigationSidebar(
+                            selectedSection: selectedSection,
+                            expanded: sidebarExpanded,
+                            isMobile: false,
+                            onSectionSelected: onSectionSelected,
+                          ),
+                          Expanded(child: child),
+                        ],
+                      ),
               ),
             ],
           ),
@@ -290,20 +407,19 @@ class _NavigationSidebar extends StatelessWidget {
     required this.selectedSection,
     required this.expanded,
     required this.onSectionSelected,
-    required this.onToggle,
+    this.isMobile = false,
   });
 
   final _DashboardSection selectedSection;
   final bool expanded;
   final ValueChanged<_DashboardSection> onSectionSelected;
-  final VoidCallback onToggle;
+  final bool isMobile;
 
   static const _items = <(_DashboardSection, String, IconData)>[
-    (_DashboardSection.status, 'Status', CupertinoIcons.info),
-    (_DashboardSection.signal, 'Signal', CupertinoIcons.waveform_path_ecg),
-    (_DashboardSection.wan, 'WAN', CupertinoIcons.globe),
-    (_DashboardSection.system, 'System', CupertinoIcons.desktopcomputer),
-    (_DashboardSection.subscriber, 'Subscriber', CupertinoIcons.person_crop_square),
+    (_DashboardSection.status, 'Status', LucideIcons.info),
+    (_DashboardSection.signal, 'Signal', LucideIcons.activity),
+    (_DashboardSection.wan, 'WAN', LucideIcons.globe),
+    (_DashboardSection.device, 'Device', LucideIcons.hardDrive),
   ];
 
   @override
@@ -312,7 +428,7 @@ class _NavigationSidebar extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
-      width: expanded ? 248 : 76,
+      width: isMobile ? 250 : (expanded ? 248 : 76),
       clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         color: colors.surface,
@@ -325,28 +441,22 @@ class _NavigationSidebar extends StatelessWidget {
       child: Column(
         children: <Widget>[
           const SizedBox(height: 8),
-          _NavigationItem(
-            icon: CupertinoIcons.bars,
-            label: '',
-            selected: false,
-            expanded: expanded,
-            onTap: onToggle,
-            tooltip: expanded ? 'Collapse navigation' : 'Expand navigation',
-          ),
           for (final item in _items)
             _NavigationItem(
               icon: item.$3,
               label: item.$2,
               selected: selectedSection == item.$1,
-              expanded: expanded,
+              expanded: isMobile ? true : expanded,
+              isMobile: isMobile,
               onTap: () => onSectionSelected(item.$1),
             ),
           const Spacer(),
           _NavigationItem(
-            icon: CupertinoIcons.settings,
+            icon: LucideIcons.settings,
             label: 'Settings',
             selected: selectedSection == _DashboardSection.settings,
-            expanded: expanded,
+            expanded: isMobile ? true : expanded,
+            isMobile: isMobile,
             onTap: () => onSectionSelected(_DashboardSection.settings),
           ),
           const SizedBox(height: 8),
@@ -363,6 +473,7 @@ class _NavigationItem extends StatelessWidget {
     required this.selected,
     required this.expanded,
     required this.onTap,
+    this.isMobile = false,
     this.tooltip,
   });
 
@@ -370,6 +481,7 @@ class _NavigationItem extends StatelessWidget {
   final String label;
   final bool selected;
   final bool expanded;
+  final bool isMobile;
   final VoidCallback onTap;
   final String? tooltip;
 
@@ -377,49 +489,52 @@ class _NavigationItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final message = tooltip ?? (expanded ? '' : label);
-    final activeBg = colors.primary.withOpacity(0.12);
-    final activeFg = colors.primary;
-    final inactiveFg = colors.onSurfaceVariant;
+    final activeBg = colors.onSurface.withOpacity(0.08);
+    final hoverBg = colors.onSurface.withOpacity(0.04);
+    final fg = colors.onSurface;
+    final iconWidth = isMobile ? 48.0 : 75.0;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      child: Tooltip(
-        message: message,
+    return Tooltip(
+      message: message,
+      child: Material(
+        color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(8),
           onTap: onTap,
+          hoverColor: hoverBg,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             height: 48,
             decoration: BoxDecoration(
               color: selected ? activeBg : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
             ),
-            child: Row(
+            child: Stack(
               children: <Widget>[
-                const SizedBox(width: 4),
-                SizedBox(
-                  width: 48,
-                  height: 48,
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: iconWidth,
                   child: Center(
                     child: Icon(
                       icon,
                       size: 22,
-                      color: selected ? activeFg : inactiveFg,
+                      color: selected ? fg : colors.onSurfaceVariant,
                     ),
                   ),
                 ),
                 if (label.isNotEmpty)
-                  Expanded(
+                  Positioned(
+                    left: iconWidth,
+                    top: 0,
+                    bottom: 0,
+                    right: 0,
                     child: ClipRect(
-                      child: OverflowBox(
-                        alignment: Alignment.centerLeft,
-                        minWidth: 0,
-                        maxWidth: 160,
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 180),
-                          opacity: expanded ? 1.0 : 0.0,
-                          curve: Curves.easeInOut,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 180),
+                        opacity: expanded ? 1.0 : 0.0,
+                        curve: Curves.easeInOut,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
                           child: Padding(
                             padding: const EdgeInsets.only(left: 6, right: 12),
                             child: Text(
@@ -429,7 +544,7 @@ class _NavigationItem extends StatelessWidget {
                               overflow: TextOverflow.clip,
                               style: TextStyle(
                                 fontSize: 14,
-                                color: selected ? activeFg : colors.onSurface,
+                                color: fg,
                                 fontWeight: selected
                                     ? FontWeight.w700
                                     : FontWeight.w500,
@@ -468,6 +583,7 @@ class _DashboardContent extends StatelessWidget {
     required this.onSplitCellIdChanged,
     required this.onSelectedSignalMetricsChanged,
     required this.onSignalTechModeChanged,
+    this.isMobile = false,
   });
 
   final RouterSnapshot snapshot;
@@ -485,14 +601,20 @@ class _DashboardContent extends StatelessWidget {
   final ValueChanged<bool> onSplitCellIdChanged;
   final ValueChanged<Set<String>> onSelectedSignalMetricsChanged;
   final ValueChanged<String> onSignalTechModeChanged;
+  final bool isMobile;
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 16 : 32,
+        vertical: isMobile ? 18 : 28,
+      ),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1120),
+          constraints: BoxConstraints(
+            maxWidth: isMobile ? double.infinity : 1560,
+          ),
           child: Column(
             children: <Widget>[
               _SectionPage(
@@ -565,7 +687,7 @@ class _SectionPage extends StatelessWidget {
       _DashboardSection.status => _PagePanel(
           title: 'Status',
           subtitle: 'Real-time network and cellular metrics',
-          icon: CupertinoIcons.info,
+          icon: LucideIcons.info,
           child: _SignalTable(
             metrics: snapshot.metrics,
             splitCellId: splitCellId,
@@ -574,7 +696,7 @@ class _SectionPage extends StatelessWidget {
       _DashboardSection.signal => _PagePanel(
           title: 'Signal',
           subtitle: 'Signal tuning and spectrum analysis',
-          icon: CupertinoIcons.waveform_path_ecg,
+          icon: LucideIcons.activity,
           headerActions: Wrap(
             spacing: 10,
             runSpacing: 8,
@@ -604,25 +726,19 @@ class _SectionPage extends StatelessWidget {
       _DashboardSection.wan => _PagePanel(
           title: 'WAN',
           subtitle: 'Internet connection details',
-          icon: CupertinoIcons.globe,
+          icon: LucideIcons.globe,
           child: _WanCard(wan: snapshot.wan),
         ),
-      _DashboardSection.system => _PagePanel(
-          title: 'System',
-          subtitle: 'Router runtime and firmware',
-          icon: CupertinoIcons.desktopcomputer,
-          child: _SystemCard(system: snapshot.system),
-        ),
-      _DashboardSection.subscriber => _PagePanel(
-          title: 'Subscriber',
-          subtitle: 'SIM and device identity',
-          icon: CupertinoIcons.person_crop_square,
-          child: _IdentityCard(snapshot: snapshot),
+      _DashboardSection.device => _PagePanel(
+          title: 'Device',
+          subtitle: 'System runtime, firmware and SIM identity',
+          icon: LucideIcons.hardDrive,
+          child: _DeviceCard(snapshot: snapshot),
         ),
       _DashboardSection.settings => _PagePanel(
           title: 'Settings',
           subtitle: 'Configure router IP and dashboard preferences',
-          icon: CupertinoIcons.settings,
+          icon: LucideIcons.settings,
           child: _SettingsCard(
             host: host,
             refreshIntervalSeconds: refreshIntervalSeconds,
@@ -800,7 +916,7 @@ class _CellIdBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(CupertinoIcons.number, size: 14, color: colors.primary),
+          Icon(LucideIcons.hash, size: 14, color: colors.primary),
           const SizedBox(width: 8),
           SelectableText(
             _formattedCellId(),
@@ -864,7 +980,7 @@ class _MetricsDropdown extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(CupertinoIcons.slider_horizontal_3, size: 14, color: colors.primary),
+            Icon(LucideIcons.sliders, size: 14, color: colors.primary),
             const SizedBox(width: 8),
             Text(
               _formatLabel(),
@@ -875,7 +991,7 @@ class _MetricsDropdown extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            Icon(CupertinoIcons.chevron_down, size: 13, color: colors.onSurfaceVariant),
+            Icon(LucideIcons.chevronDown, size: 13, color: colors.onSurfaceVariant),
           ],
         ),
       ),
@@ -906,7 +1022,7 @@ class _TechModeDropdown extends StatelessWidget {
         child: DropdownButton<String>(
           value: mode,
           isDense: true,
-          icon: const Icon(CupertinoIcons.chevron_down, size: 13),
+          icon: const Icon(LucideIcons.chevronDown, size: 13),
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -1086,6 +1202,136 @@ class _SignalPage extends StatelessWidget {
   }
 }
 
+class _ChartRange {
+  const _ChartRange(this.minY, this.maxY);
+  final double minY;
+  final double maxY;
+
+  static _ChartRange lerp(_ChartRange a, _ChartRange b, double t) {
+    return _ChartRange(
+      a.minY + (b.minY - a.minY) * t,
+      a.maxY + (b.maxY - a.maxY) * t,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _ChartRange &&
+          runtimeType == other.runtimeType &&
+          minY == other.minY &&
+          maxY == other.maxY;
+
+  @override
+  int get hashCode => Object.hash(minY, maxY);
+}
+
+class _ChartRangeTween extends Tween<_ChartRange> {
+  _ChartRangeTween({super.begin, super.end});
+
+  @override
+  _ChartRange lerp(double t) {
+    final b = begin ?? end ?? const _ChartRange(-100, 0);
+    final e = end ?? begin ?? const _ChartRange(-100, 0);
+    return _ChartRange.lerp(b, e, t);
+  }
+}
+
+_ChartRange _calculateDynamicYRange(
+  String metricKey,
+  List<SignalMetricSample> history,
+  bool show4g,
+  bool show5g,
+) {
+  final allVals = <double>[];
+  for (final sample in history) {
+    if (show4g) {
+      final v = sample.getValue(metricKey, is5g: false);
+      if (v != null) allVals.add(v);
+    }
+    if (show5g) {
+      final v = sample.getValue(metricKey, is5g: true);
+      if (v != null) allVals.add(v);
+    }
+  }
+
+  final key = metricKey.toUpperCase();
+  double minSpan;
+  double hardMin;
+  double hardMax;
+  double fallbackMin;
+  double fallbackMax;
+
+  switch (key) {
+    case 'RSSI':
+      minSpan = 8.0;
+      hardMin = -130.0;
+      hardMax = -20.0;
+      fallbackMin = -105.0;
+      fallbackMax = -65.0;
+      break;
+    case 'RSRP':
+      minSpan = 8.0;
+      hardMin = -145.0;
+      hardMax = -40.0;
+      fallbackMin = -120.0;
+      fallbackMax = -75.0;
+      break;
+    case 'RSRQ':
+      minSpan = 4.0;
+      hardMin = -30.0;
+      hardMax = 5.0;
+      fallbackMin = -20.0;
+      fallbackMax = -5.0;
+      break;
+    case 'SINR':
+      minSpan = 6.0;
+      hardMin = -25.0;
+      hardMax = 45.0;
+      fallbackMin = -5.0;
+      fallbackMax = 25.0;
+      break;
+    default:
+      minSpan = 8.0;
+      hardMin = -150.0;
+      hardMax = 100.0;
+      fallbackMin = -100.0;
+      fallbackMax = 0.0;
+  }
+
+  if (allVals.isEmpty) {
+    return _ChartRange(fallbackMin, fallbackMax);
+  }
+
+  final sampleMin = allVals.reduce((a, b) => a < b ? a : b);
+  final sampleMax = allVals.reduce((a, b) => a > b ? a : b);
+  final rawSpan = sampleMax - sampleMin;
+
+  double targetMin;
+  double targetMax;
+
+  if (rawSpan < minSpan) {
+    final mid = (sampleMin + sampleMax) / 2.0;
+    targetMin = (mid - (minSpan / 2.0)).floorToDouble();
+    targetMax = (mid + (minSpan / 2.0)).ceilToDouble();
+  } else {
+    final padding = (rawSpan * 0.15).clamp(1.5, 6.0);
+    targetMin = (sampleMin - padding).floorToDouble();
+    targetMax = (sampleMax + padding).ceilToDouble();
+  }
+
+  if (targetMax - targetMin < minSpan) {
+    final diff = minSpan - (targetMax - targetMin);
+    targetMin = (targetMin - diff / 2.0).floorToDouble();
+    targetMax = (targetMax + diff / 2.0).ceilToDouble();
+  }
+
+  targetMin = targetMin.clamp(hardMin, hardMax - minSpan);
+  targetMax = targetMax.clamp(targetMin + minSpan, hardMax);
+
+  return _ChartRange(targetMin, targetMax);
+}
+
 class _MetricGraphCard extends StatelessWidget {
   const _MetricGraphCard({
     required this.title,
@@ -1109,6 +1355,7 @@ class _MetricGraphCard extends StatelessWidget {
     final latest = history.isNotEmpty ? history.last : null;
     final lteVal = latest?.getValue(metricKey, is5g: false);
     final nr5gVal = latest?.getValue(metricKey, is5g: true);
+    final targetRange = _calculateDynamicYRange(metricKey, history, show4g, show5g);
 
     return Container(
       decoration: BoxDecoration(
@@ -1188,16 +1435,25 @@ class _MetricGraphCard extends StatelessWidget {
             SizedBox(
               height: 240,
               width: double.infinity,
-              child: CustomPaint(
-                painter: _MetricLineChartPainter(
-                  metricKey: metricKey,
-                  unit: unit,
-                  history: history,
-                  show4g: show4g,
-                  show5g: show5g,
-                  gridColor: colors.outlineVariant.withOpacity(0.3),
-                  labelColor: colors.onSurfaceVariant,
-                ),
+              child: TweenAnimationBuilder<_ChartRange>(
+                tween: _ChartRangeTween(end: targetRange),
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.easeOutCubic,
+                builder: (context, range, child) {
+                  return CustomPaint(
+                    painter: _MetricLineChartPainter(
+                      metricKey: metricKey,
+                      unit: unit,
+                      history: history,
+                      show4g: show4g,
+                      show5g: show5g,
+                      minY: range.minY,
+                      maxY: range.maxY,
+                      gridColor: colors.outlineVariant.withOpacity(0.3),
+                      labelColor: colors.onSurfaceVariant,
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -1214,6 +1470,8 @@ class _MetricLineChartPainter extends CustomPainter {
     required this.history,
     required this.show4g,
     required this.show5g,
+    required this.minY,
+    required this.maxY,
     required this.gridColor,
     required this.labelColor,
   });
@@ -1223,6 +1481,8 @@ class _MetricLineChartPainter extends CustomPainter {
   final List<SignalMetricSample> history;
   final bool show4g;
   final bool show5g;
+  final double minY;
+  final double maxY;
   final Color gridColor;
   final Color labelColor;
 
@@ -1244,7 +1504,7 @@ class _MetricLineChartPainter extends CustomPainter {
       final single = pointsSource.first;
       pointsSource = [
         SignalMetricSample(
-          timestamp: now.subtract(const Duration(seconds: 30)),
+          timestamp: now.subtract(const Duration(seconds: 60)),
           rssiLte: single.rssiLte,
           rssiNr5g: single.rssiNr5g,
           rsrpLte: single.rsrpLte,
@@ -1258,56 +1518,7 @@ class _MetricLineChartPainter extends CustomPainter {
       ];
     }
 
-    double defaultMin;
-    double defaultMax;
-    switch (metricKey.toUpperCase()) {
-      case 'RSSI':
-        defaultMin = -110;
-        defaultMax = -40;
-        break;
-      case 'RSRP':
-        defaultMin = -130;
-        defaultMax = -60;
-        break;
-      case 'RSRQ':
-        defaultMin = -24;
-        defaultMax = 0;
-        break;
-      case 'SINR':
-        defaultMin = -10;
-        defaultMax = 30;
-        break;
-      default:
-        defaultMin = -100;
-        defaultMax = 0;
-    }
-
-    double minY = defaultMin;
-    double maxY = defaultMax;
-
-    final allVals = <double>[];
-    for (final s in pointsSource) {
-      if (show4g) {
-        final v = s.getValue(metricKey, is5g: false);
-        if (v != null) allVals.add(v);
-      }
-      if (show5g) {
-        final v = s.getValue(metricKey, is5g: true);
-        if (v != null) allVals.add(v);
-      }
-    }
-
-    if (allVals.isNotEmpty) {
-      final sampleMin = allVals.reduce((a, b) => a < b ? a : b);
-      final sampleMax = allVals.reduce((a, b) => a > b ? a : b);
-      if (sampleMin < minY) minY = (sampleMin - 5).floorToDouble();
-      if (sampleMax > maxY) maxY = (sampleMax + 5).ceilToDouble();
-    }
-
-    if (minY == maxY) {
-      minY -= 5;
-      maxY += 5;
-    }
+    final effectiveSpan = (maxY - minY) <= 0 ? 1.0 : (maxY - minY);
 
     final gridPaint = Paint()
       ..color = gridColor
@@ -1315,14 +1526,16 @@ class _MetricLineChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     const numYDivisions = 3;
+    final isCompactSpan = (maxY - minY) < 4.0;
     for (var i = 0; i <= numYDivisions; i++) {
       final yRatio = i / numYDivisions;
       final y = chartBottom - (yRatio * chartHeight);
       canvas.drawLine(Offset(chartLeft, y), Offset(chartRight, y), gridPaint);
 
       final val = minY + (yRatio * (maxY - minY));
+      final labelText = isCompactSpan ? val.toStringAsFixed(1) : val.round().toString();
       final textSpan = TextSpan(
-        text: val.round().toString(),
+        text: labelText,
         style: TextStyle(fontSize: 10, color: labelColor),
       );
       final tp = TextPainter(
@@ -1333,9 +1546,10 @@ class _MetricLineChartPainter extends CustomPainter {
     }
 
     final xLabels = <(double, String)>[
-      (0.0, '-30s'),
-      (0.333, '-20s'),
-      (0.666, '-10s'),
+      (0.0, '-60s'),
+      (0.25, '-45s'),
+      (0.5, '-30s'),
+      (0.75, '-15s'),
       (1.0, 'Now'),
     ];
 
@@ -1361,9 +1575,9 @@ class _MetricLineChartPainter extends CustomPainter {
         final val = sample.getValue(metricKey, is5g: is5g);
         if (val == null) continue;
         final age = now.difference(sample.timestamp).inMilliseconds / 1000.0;
-        final x = chartRight - ((age / 30.0) * chartWidth);
+        final x = chartRight - ((age / 60.0) * chartWidth);
         final clampedX = x.clamp(chartLeft, chartRight);
-        final yRatio = (val - minY) / (maxY - minY);
+        final yRatio = (val - minY) / effectiveSpan;
         final y = chartBottom - (yRatio * chartHeight);
         final clampedY = y.clamp(chartTop, chartBottom);
         points.add(Offset(clampedX, clampedY));
@@ -1436,7 +1650,9 @@ class _MetricLineChartPainter extends CustomPainter {
     return oldDelegate.history != history ||
         oldDelegate.show4g != show4g ||
         oldDelegate.show5g != show5g ||
-        oldDelegate.metricKey != metricKey;
+        oldDelegate.metricKey != metricKey ||
+        oldDelegate.minY != minY ||
+        oldDelegate.maxY != maxY;
   }
 }
 
@@ -1529,7 +1745,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                     color: colors.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Icon(CupertinoIcons.antenna_radiowaves_left_right, color: colors.primary, size: 18),
+                  child: Icon(LucideIcons.radio, color: colors.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -1623,7 +1839,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                     color: colors.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Icon(CupertinoIcons.timer, color: colors.primary, size: 18),
+                  child: Icon(LucideIcons.timer, color: colors.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -1707,7 +1923,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                     color: colors.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Icon(CupertinoIcons.slider_horizontal_3, color: colors.primary, size: 18),
+                  child: Icon(LucideIcons.sliders, color: colors.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -1765,6 +1981,9 @@ class _StatusBar extends StatelessWidget {
     required this.metrics,
     required this.lastUpdated,
     required this.onRefresh,
+    this.isMobile = false,
+    this.onToggleSidebar,
+    this.menuAnimation,
   });
 
   final String host;
@@ -1772,6 +1991,9 @@ class _StatusBar extends StatelessWidget {
   final List<RouterMetric> metrics;
   final DateTime? lastUpdated;
   final VoidCallback onRefresh;
+  final bool isMobile;
+  final VoidCallback? onToggleSidebar;
+  final Animation<double>? menuAnimation;
 
   @override
   Widget build(BuildContext context) {
@@ -1796,7 +2018,8 @@ class _StatusBar extends StatelessWidget {
     final signalBars = _calculateSignalBars(primaryRsrp);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
+      padding: EdgeInsets.fromLTRB(
+          isMobile ? 12 : 0, 8, isMobile ? 12 : 20, 8),
       decoration: BoxDecoration(
         color: colors.surface,
         border: Border(
@@ -1807,41 +2030,74 @@ class _StatusBar extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
+          SizedBox(
+            width: isMobile ? 48 : 76,
+            child: Center(
+              child: Tooltip(
+                message: (menuAnimation?.value ?? 0) > 0.5
+                    ? (isMobile ? 'Close navigation' : 'Collapse navigation')
+                    : (isMobile ? 'Open navigation' : 'Expand navigation'),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: onToggleSidebar,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: AnimatedIcon(
+                        icon: AnimatedIcons.menu_close,
+                        progress:
+                            menuAnimation ?? const AlwaysStoppedAnimation(0.0),
+                        size: 22,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: isMobile ? 8 : 16),
           Expanded(
-            child: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 16,
-              runSpacing: 8,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 10,
-                      children: <Widget>[
-                        Text(
-                          'Dialog AirFibre',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                        _StatusChip(
-                          signalBars: signalBars,
-                          label: badgeStyle.$1,
-                          backgroundColor: badgeStyle.$2,
-                          foregroundColor: badgeStyle.$3,
-                          borderColor: badgeStyle.$4,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
                     Text(
-                      'Connected - $host',
+                      'Dialog AirFibre',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                          ),
+                    ),
+                    const SizedBox(width: 8),
+                    _StatusChip(
+                      signalBars: signalBars,
+                      label: badgeStyle.$1,
+                      backgroundColor: badgeStyle.$2,
+                      foregroundColor: badgeStyle.$3,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    const _BreathingDot(),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Router Connected @ $host',
                       style: TextStyle(
-                        fontSize: 10,
-                        color: colors.onSurfaceVariant,
+                        fontSize: 11,
+                        color: colors.onSurfaceVariant.withOpacity(0.7),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -1851,38 +2107,118 @@ class _StatusBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          if (lastUpdated != null) ...<Widget>[
-            Text(
-              'Last Synced: ${_formatClock(lastUpdated!)}',
-              style: TextStyle(
-                fontSize: 10,
-                color: colors.outline,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(width: 12),
-          ],
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: onRefresh,
-            style: IconButton.styleFrom(
-              backgroundColor: colors.surfaceContainerHighest.withOpacity(0.6),
-              hoverColor: colors.primary.withOpacity(0.1),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-                side: BorderSide(
-                  color: colors.outlineVariant.withOpacity(0.3),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              IconButton(
+                tooltip: 'Refresh',
+                onPressed: onRefresh,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+                style: IconButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.all(3),
+                  backgroundColor:
+                      colors.surfaceContainerHighest.withOpacity(0.6),
+                  hoverColor: colors.primary.withOpacity(0.1),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(5),
+                    side: BorderSide(
+                      color: colors.outlineVariant.withOpacity(0.3),
+                    ),
+                  ),
+                ),
+                icon: Icon(
+                  LucideIcons.rotateCw,
+                  size: 13,
+                  color: colors.onSurfaceVariant,
                 ),
               ),
-            ),
-            icon: Icon(
-              CupertinoIcons.refresh,
-              size: 20,
-              color: colors.onSurfaceVariant,
-            ),
+              const SizedBox(height: 2),
+              Text(
+                lastUpdated != null
+                    ? 'Last Synced: ${_formatClock(lastUpdated!)}'
+                    : '',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: colors.onSurfaceVariant.withOpacity(0.7),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _BreathingDot extends StatefulWidget {
+  const _BreathingDot({
+    this.color = const Color(0xFF10B981),
+    this.size = 6.0,
+  });
+
+  final Color color;
+  final double size;
+
+  @override
+  State<_BreathingDot> createState() => _BreathingDotState();
+}
+
+class _BreathingDotState extends State<_BreathingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  );
+
+  late final Animation<double> _animation = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeInOut,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    final isTest =
+        WidgetsBinding.instance.runtimeType.toString().contains('Test');
+    if (!isTest) {
+      _controller.repeat(reverse: true);
+    } else {
+      _controller.value = 1.0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, _) {
+        final val = _animation.value;
+        return Container(
+          width: widget.size,
+          height: widget.size,
+          decoration: BoxDecoration(
+            color: widget.color.withOpacity(0.5 + 0.5 * val),
+            shape: BoxShape.circle,
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: widget.color.withOpacity(0.2 + 0.4 * val),
+                blurRadius: 3 + 3 * val,
+                spreadRadius: 0.5 * val,
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -1931,7 +2267,7 @@ class _SignalBarsIcon extends StatelessWidget {
   }
 }
 
-(String, Color, Color, Color) _getNetworkBadgeStyle(
+(String, Color, Color) _getNetworkBadgeStyle(
   String rawNetworkType,
   ColorScheme colors,
 ) {
@@ -1941,7 +2277,6 @@ class _SignalBarsIcon extends StatelessWidget {
       'No Service',
       const Color(0xFFFEE2E2),
       const Color(0xFFDC2626),
-      const Color(0xFFFCA5A5),
     );
   }
   if (upper.contains('5G')) {
@@ -1949,7 +2284,6 @@ class _SignalBarsIcon extends StatelessWidget {
       rawNetworkType,
       const Color(0xFFE0E7FF), // light background
       const Color(0xFF003BFF), // very saturated blue
-      const Color(0xFF4D73FF), // secondary blue
     );
   }
   if (upper.contains('4G') || upper.contains('LTE')) {
@@ -1957,14 +2291,12 @@ class _SignalBarsIcon extends StatelessWidget {
       rawNetworkType,
       const Color(0xFFD1FAE5), // light green
       const Color(0xFF00A83B), // saturated green
-      const Color(0xFF4ADE80), // secondary green
     );
   }
   return (
     rawNetworkType,
     colors.surfaceContainerHighest.withOpacity(0.6),
     colors.onSurfaceVariant,
-    colors.outlineVariant.withOpacity(0.3),
   );
 }
 
@@ -1974,39 +2306,39 @@ class _StatusChip extends StatelessWidget {
     required this.label,
     this.backgroundColor,
     this.foregroundColor,
-    this.borderColor,
   });
 
   final int signalBars;
   final String label;
   final Color? backgroundColor;
   final Color? foregroundColor;
-  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final bg = backgroundColor ?? colors.surfaceContainerHighest.withOpacity(0.6);
     final fg = foregroundColor ?? colors.onSurfaceVariant;
-    final border = borderColor ?? colors.outlineVariant.withOpacity(0.3);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+      height: 20,
+      constraints: const BoxConstraints(maxHeight: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 7),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
           _SignalBarsIcon(bars: signalBars, color: fg),
-          const SizedBox(width: 6),
+          const SizedBox(width: 5),
           Text(
             label,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 10.5,
               fontWeight: FontWeight.w700,
+              height: 1.0,
               color: fg,
             ),
           ),
@@ -2101,8 +2433,8 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({required this.snapshot});
+class _DeviceCard extends StatelessWidget {
+  const _DeviceCard({required this.snapshot});
 
   final RouterSnapshot snapshot;
 
@@ -2110,6 +2442,8 @@ class _IdentityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _InfoCard(
       rows: <_InfoRowData>[
+        _InfoRowData('Runtime', snapshot.system.formattedUptime),
+        _InfoRowData('Firmware', snapshot.system.firmwareVersion),
         _InfoRowData('IMSI', snapshot.imsi),
         _InfoRowData('IMEI', snapshot.imei),
       ],
@@ -2132,22 +2466,6 @@ class _WanCard extends StatelessWidget {
         _InfoRowData('IPv6 Address', wan.ipv6Address),
         _InfoRowData('IPv6 DNS', wan.preferredIpv6Dns),
         _InfoRowData('Backup IPv6', wan.backupIpv6Dns),
-      ],
-    );
-  }
-}
-
-class _SystemCard extends StatelessWidget {
-  const _SystemCard({required this.system});
-
-  final SystemInfo system;
-
-  @override
-  Widget build(BuildContext context) {
-    return _InfoCard(
-      rows: <_InfoRowData>[
-        _InfoRowData('Runtime', system.formattedUptime),
-        _InfoRowData('Firmware', system.firmwareVersion),
       ],
     );
   }
@@ -2198,8 +2516,9 @@ class _SignalTable extends StatelessWidget {
                 _TableCell('5G NR', header: true),
               ],
             ),
-            for (final metric in metrics) ...<TableRow>[
+            for (var idx = 0; idx < metrics.length; idx++) ...<TableRow>[
               () {
+                final metric = metrics[idx];
                 final isCellId = metric.label.toLowerCase() == 'cell id';
                 var lteVal = metric.valueFor(CellularLayer.lte);
                 var nr5gVal = metric.valueFor(CellularLayer.nr5g);
@@ -2213,6 +2532,9 @@ class _SignalTable extends StatelessWidget {
                 }
                 return TableRow(
                   decoration: BoxDecoration(
+                    color: idx.isEven
+                        ? Colors.transparent
+                        : colors.surfaceContainerHighest.withOpacity(0.2),
                     border: Border(
                       bottom: BorderSide(
                         color: colors.outlineVariant.withOpacity(0.2),
@@ -2312,7 +2634,7 @@ class _ErrorState extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    CupertinoIcons.wifi_slash,
+                    LucideIcons.wifiOff,
                     size: 36,
                     color: theme.colorScheme.error,
                   ),
@@ -2341,7 +2663,7 @@ class _ErrorState extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  icon: const Icon(CupertinoIcons.refresh),
+                  icon: const Icon(LucideIcons.refreshCw),
                   label: const Text('Refresh'),
                 ),
               ],
