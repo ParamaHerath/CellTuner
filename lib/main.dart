@@ -1971,12 +1971,9 @@ class _MetricLineChartPainter extends CustomPainter {
     if (show5g) drawSeries(true, const Color(0xFF003BFF));
 
     final handoffPaint = Paint()
-      ..color = const Color(0xFFF59E0B)
-      ..strokeWidth = 1.5
+      ..color = const Color(0xFF111827)
+      ..strokeWidth = 1.2
       ..style = PaintingStyle.stroke;
-
-    final handoffPinBg = Paint()..color = const Color(0xFFF59E0B);
-    final handoffPinInner = Paint()..color = Colors.white;
 
     for (final handoff in handoffs) {
       final age = now.difference(handoff.timestamp).inMilliseconds / 1000.0;
@@ -1987,15 +1984,12 @@ class _MetricLineChartPainter extends CustomPainter {
 
       const dashHeight = 3.0;
       const dashSpace = 3.0;
-      var y = chartTop + 6.0;
+      var y = chartTop;
       while (y < chartBottom) {
         final nextY = (y + dashHeight).clamp(chartTop, chartBottom);
         canvas.drawLine(Offset(x, y), Offset(x, nextY), handoffPaint);
         y += dashHeight + dashSpace;
       }
-
-      canvas.drawCircle(Offset(x, chartTop + 2.0), 3.5, handoffPinBg);
-      canvas.drawCircle(Offset(x, chartTop + 2.0), 1.5, handoffPinInner);
     }
   }
 
