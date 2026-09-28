@@ -1957,20 +1957,25 @@ class _StatusBar extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Text(
-                  'Dialog AirFibre',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.2,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                _StatusChip(
-                  signalBars: signalBars,
-                  label: badgeStyle.$1,
-                  backgroundColor: badgeStyle.$2,
-                  foregroundColor: badgeStyle.$3,
-                  borderColor: badgeStyle.$4,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      'Dialog AirFibre',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                          ),
+                    ),
+                    const SizedBox(width: 8),
+                    _StatusChip(
+                      signalBars: signalBars,
+                      label: badgeStyle.$1,
+                      backgroundColor: badgeStyle.$2,
+                      foregroundColor: badgeStyle.$3,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -2067,7 +2072,7 @@ class _SignalBarsIcon extends StatelessWidget {
   }
 }
 
-(String, Color, Color, Color) _getNetworkBadgeStyle(
+(String, Color, Color) _getNetworkBadgeStyle(
   String rawNetworkType,
   ColorScheme colors,
 ) {
@@ -2077,7 +2082,6 @@ class _SignalBarsIcon extends StatelessWidget {
       'No Service',
       const Color(0xFFFEE2E2),
       const Color(0xFFDC2626),
-      const Color(0xFFFCA5A5),
     );
   }
   if (upper.contains('5G')) {
@@ -2085,7 +2089,6 @@ class _SignalBarsIcon extends StatelessWidget {
       rawNetworkType,
       const Color(0xFFE0E7FF), // light background
       const Color(0xFF003BFF), // very saturated blue
-      const Color(0xFF4D73FF), // secondary blue
     );
   }
   if (upper.contains('4G') || upper.contains('LTE')) {
@@ -2093,14 +2096,12 @@ class _SignalBarsIcon extends StatelessWidget {
       rawNetworkType,
       const Color(0xFFD1FAE5), // light green
       const Color(0xFF00A83B), // saturated green
-      const Color(0xFF4ADE80), // secondary green
     );
   }
   return (
     rawNetworkType,
     colors.surfaceContainerHighest.withOpacity(0.6),
     colors.onSurfaceVariant,
-    colors.outlineVariant.withOpacity(0.3),
   );
 }
 
@@ -2110,39 +2111,39 @@ class _StatusChip extends StatelessWidget {
     required this.label,
     this.backgroundColor,
     this.foregroundColor,
-    this.borderColor,
   });
 
   final int signalBars;
   final String label;
   final Color? backgroundColor;
   final Color? foregroundColor;
-  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final bg = backgroundColor ?? colors.surfaceContainerHighest.withOpacity(0.6);
     final fg = foregroundColor ?? colors.onSurfaceVariant;
-    final border = borderColor ?? colors.outlineVariant.withOpacity(0.3);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+      height: 20,
+      constraints: const BoxConstraints(maxHeight: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 7),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
           _SignalBarsIcon(bars: signalBars, color: fg),
-          const SizedBox(width: 6),
+          const SizedBox(width: 5),
           Text(
             label,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 10.5,
               fontWeight: FontWeight.w700,
+              height: 1.0,
               color: fg,
             ),
           ),
