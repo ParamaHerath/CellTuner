@@ -1910,7 +1910,7 @@ class _StatusBar extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.fromLTRB(
-          isMobile ? 12 : 16, 12, isMobile ? 12 : 20, 12),
+          isMobile ? 12 : 0, 8, isMobile ? 12 : 20, 8),
       decoration: BoxDecoration(
         color: colors.surface,
         border: Border(
@@ -1921,27 +1921,37 @@ class _StatusBar extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          IconButton(
-            tooltip: (menuAnimation?.value ?? 0) > 0.5
-                ? (isMobile ? 'Close navigation' : 'Collapse navigation')
-                : (isMobile ? 'Open navigation' : 'Expand navigation'),
-            onPressed: onToggleSidebar,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            style: IconButton.styleFrom(
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              padding: const EdgeInsets.all(4),
-              hoverColor: colors.primary.withOpacity(0.08),
-              highlightColor: Colors.transparent,
-            ),
-            icon: AnimatedIcon(
-              icon: AnimatedIcons.menu_close,
-              progress: menuAnimation ?? const AlwaysStoppedAnimation(0.0),
-              size: 22,
-              color: colors.onSurface,
+          SizedBox(
+            width: isMobile ? 48 : 76,
+            child: Center(
+              child: Tooltip(
+                message: (menuAnimation?.value ?? 0) > 0.5
+                    ? (isMobile ? 'Close navigation' : 'Collapse navigation')
+                    : (isMobile ? 'Open navigation' : 'Expand navigation'),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: onToggleSidebar,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: AnimatedIcon(
+                        icon: AnimatedIcons.menu_close,
+                        progress:
+                            menuAnimation ?? const AlwaysStoppedAnimation(0.0),
+                        size: 22,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: isMobile ? 8 : 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
