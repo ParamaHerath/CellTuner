@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'router/router_api_client.dart';
 import 'router/router_snapshot.dart';
@@ -415,10 +415,10 @@ class _NavigationSidebar extends StatelessWidget {
   final bool isMobile;
 
   static const _items = <(_DashboardSection, String, IconData)>[
-    (_DashboardSection.status, 'Status', CupertinoIcons.info),
-    (_DashboardSection.signal, 'Signal', CupertinoIcons.waveform_path_ecg),
-    (_DashboardSection.wan, 'WAN', CupertinoIcons.globe),
-    (_DashboardSection.device, 'Device', CupertinoIcons.device_desktop),
+    (_DashboardSection.status, 'Status', LucideIcons.info),
+    (_DashboardSection.signal, 'Signal', LucideIcons.activity),
+    (_DashboardSection.wan, 'WAN', LucideIcons.globe),
+    (_DashboardSection.device, 'Device', LucideIcons.hardDrive),
   ];
 
   @override
@@ -450,7 +450,7 @@ class _NavigationSidebar extends StatelessWidget {
             ),
           const Spacer(),
           _NavigationItem(
-            icon: CupertinoIcons.settings,
+            icon: LucideIcons.settings,
             label: 'Settings',
             selected: selectedSection == _DashboardSection.settings,
             expanded: isMobile ? true : expanded,
@@ -679,7 +679,7 @@ class _SectionPage extends StatelessWidget {
       _DashboardSection.status => _PagePanel(
           title: 'Status',
           subtitle: 'Real-time network and cellular metrics',
-          icon: CupertinoIcons.info,
+          icon: LucideIcons.info,
           child: _SignalTable(
             metrics: snapshot.metrics,
             splitCellId: splitCellId,
@@ -688,7 +688,7 @@ class _SectionPage extends StatelessWidget {
       _DashboardSection.signal => _PagePanel(
           title: 'Signal',
           subtitle: 'Signal tuning and spectrum analysis',
-          icon: CupertinoIcons.waveform_path_ecg,
+          icon: LucideIcons.activity,
           headerActions: Wrap(
             spacing: 10,
             runSpacing: 8,
@@ -718,19 +718,19 @@ class _SectionPage extends StatelessWidget {
       _DashboardSection.wan => _PagePanel(
           title: 'WAN',
           subtitle: 'Internet connection details',
-          icon: CupertinoIcons.globe,
+          icon: LucideIcons.globe,
           child: _WanCard(wan: snapshot.wan),
         ),
       _DashboardSection.device => _PagePanel(
           title: 'Device',
           subtitle: 'System runtime, firmware and SIM identity',
-          icon: CupertinoIcons.device_desktop,
+          icon: LucideIcons.hardDrive,
           child: _DeviceCard(snapshot: snapshot),
         ),
       _DashboardSection.settings => _PagePanel(
           title: 'Settings',
           subtitle: 'Configure router IP and dashboard preferences',
-          icon: CupertinoIcons.settings,
+          icon: LucideIcons.settings,
           child: _SettingsCard(
             host: host,
             refreshIntervalSeconds: refreshIntervalSeconds,
@@ -908,7 +908,7 @@ class _CellIdBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(CupertinoIcons.number, size: 14, color: colors.primary),
+          Icon(LucideIcons.hash, size: 14, color: colors.primary),
           const SizedBox(width: 8),
           SelectableText(
             _formattedCellId(),
@@ -972,7 +972,7 @@ class _MetricsDropdown extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(CupertinoIcons.slider_horizontal_3, size: 14, color: colors.primary),
+            Icon(LucideIcons.sliders, size: 14, color: colors.primary),
             const SizedBox(width: 8),
             Text(
               _formatLabel(),
@@ -983,7 +983,7 @@ class _MetricsDropdown extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            Icon(CupertinoIcons.chevron_down, size: 13, color: colors.onSurfaceVariant),
+            Icon(LucideIcons.chevronDown, size: 13, color: colors.onSurfaceVariant),
           ],
         ),
       ),
@@ -1014,7 +1014,7 @@ class _TechModeDropdown extends StatelessWidget {
         child: DropdownButton<String>(
           value: mode,
           isDense: true,
-          icon: const Icon(CupertinoIcons.chevron_down, size: 13),
+          icon: const Icon(LucideIcons.chevronDown, size: 13),
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -1638,7 +1638,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                     color: colors.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Icon(CupertinoIcons.antenna_radiowaves_left_right, color: colors.primary, size: 18),
+                  child: Icon(LucideIcons.radio, color: colors.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -1732,7 +1732,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                     color: colors.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Icon(CupertinoIcons.timer, color: colors.primary, size: 18),
+                  child: Icon(LucideIcons.timer, color: colors.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -1816,7 +1816,7 @@ class _SettingsCardState extends State<_SettingsCard> {
                     color: colors.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Icon(CupertinoIcons.slider_horizontal_3, color: colors.primary, size: 18),
+                  child: Icon(LucideIcons.sliders, color: colors.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -1989,7 +1989,7 @@ class _StatusBar extends StatelessWidget {
                   ),
                 ),
                 icon: Icon(
-                  CupertinoIcons.refresh,
+                  LucideIcons.refreshCw,
                   size: 13,
                   color: colors.onSurfaceVariant,
                 ),
@@ -2428,7 +2428,7 @@ class _ErrorState extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    CupertinoIcons.wifi_slash,
+                    LucideIcons.wifiOff,
                     size: 36,
                     color: theme.colorScheme.error,
                   ),
@@ -2457,7 +2457,7 @@ class _ErrorState extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  icon: const Icon(CupertinoIcons.refresh),
+                  icon: const Icon(LucideIcons.refreshCw),
                   label: const Text('Refresh'),
                 ),
               ],
