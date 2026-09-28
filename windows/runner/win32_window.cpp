@@ -179,6 +179,15 @@ Win32Window::MessageHandler(HWND hwnd,
                             WPARAM const wparam,
                             LPARAM const lparam) noexcept {
   switch (message) {
+    case WM_GETMINMAXINFO: {
+      auto info = reinterpret_cast<MINMAXINFO*>(lparam);
+      UINT dpi = GetDpiForWindow(hwnd);
+      float scaling = dpi / 96.0f;
+      info->ptMinTrackSize.x = static_cast<LONG>(535 * scaling);
+      info->ptMinTrackSize.y = static_cast<LONG>(500 * scaling);
+      return 0;
+    }
+
     case WM_DESTROY:
       window_handle_ = nullptr;
       Destroy();
