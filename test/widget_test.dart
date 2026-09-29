@@ -168,6 +168,72 @@ void main() {
 
     debugDefaultTargetPlatformOverride = null;
   });
+
+  testWidgets('opens record session dialog, starts recording, and handles completion',
+      (WidgetTester tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      CellTunerApp(snapshotLoader: () async => _sampleSnapshot()),
+    );
+    await tester.pumpAndSettle();
+
+    // Open sidebar and navigate to Signal page
+    await tester.tap(find.byType(AnimatedIcon));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Signal'));
+    await tester.pumpAndSettle();
+
+    // Verify Record button exists
+    expect(find.text('Record'), findsOneWidget);
+
+    // Tap Record button to open dialog
+    await tester.tap(find.text('Record'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Record Signal Session'), findsOneWidget);
+    expect(find.text('Session Duration'), findsOneWidget);
+    expect(find.text('Start Recording'), findsOneWidget);
+
+    // Tap Start Recording
+    await tester.tap(find.text('Start Recording'));
+    await tester.pumpAndSettle();
+
+    // Dialog should be dismissed, and button should now display Recording
+    expect(find.text('Record Signal Session'), findsNothing);
+    expect(find.textContaining('Recording'), findsOneWidget);
+
+    // Tapping while recording opens recording in progress dialog
+    await tester.tap(find.textContaining('Recording'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recording in Progress'), findsOneWidget);
+    expect(find.text('Stop & Save'), findsOneWidget);
+
+    // Tap Stop & Save
+    await tester.tap(find.text('Stop & Save'));
+    await tester.pumpAndSettle();
+
+    // Completion popup appears
+    expect(find.text('Recording Complete'), findsOneWidget);
+    expect(find.text('Open File'), findsOneWidget);
+
+    // Close completion dialog
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recording Complete'), findsNothing);
+    expect(find.text('Record'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+  });
 }
 
 RouterSnapshot _sampleSnapshot() {
