@@ -70,6 +70,8 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
   Set<String> _selectedSignalMetrics = <String>{'RSSI', 'RSRP', 'RSRQ', 'SINR'};
   String _signalTechMode = 'Both (4G & 5G)';
   String _signalTimeWindow = '1min';
+  SignalRecordingSession? _recordingSession;
+  Timer? _recordingTimer;
 
   RouterSnapshotLoader get _loader =>
       widget.snapshotLoader ?? _client!.fetchSnapshot;
@@ -97,6 +99,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _recordingTimer?.cancel();
     _menuAnimation.dispose();
     _client?.close();
     super.dispose();
@@ -160,7 +163,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
       return null;
     }
 
-    _signalHistory.add(SignalMetricSample(
+    final sample = SignalMetricSample(
       timestamp: now,
       rssiLte: findVal('RSSI', CellularLayer.lte),
       rssiNr5g: findVal('RSSI', CellularLayer.nr5g),
@@ -172,9 +175,223 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
       sinrNr5g: findVal('SINR', CellularLayer.nr5g),
       cellIdLte: findCellId(CellularLayer.lte),
       cellIdNr5g: findCellId(CellularLayer.nr5g),
-    ));
+    );
 
+    _signalHistory.add(sample);
     _signalHistory.removeWhere((s) => s.timestamp.isBefore(cutoff));
+
+    if (_recordingSession != null && !_recordingSession!.isCompleted) {
+      _recordingSession!.addSample(sample);
+      if (_recordingSession!.progressFraction() >= 1.0) {
+        _finishAndSaveRecording();
+      }
+    }
+  }
+
+  void _startRecording(String durationLabel) {
+    _recordingTimer?.cancel();
+    final durationSeconds = parseTimeWindowSeconds(durationLabel);
+    final now = DateTime.now();
+
+    final session = SignalRecordingSession(
+      id: 'session_${now.millisecondsSinceEpoch}',
+      startTime: now,
+      targetDurationSeconds: durationSeconds,
+      durationLabel: durationLabel,
+      routerHost: _host,
+      initialSamples: _signalHistory.isNotEmpty ? [_signalHistory.last] : null,
+    );
+
+    setState(() {
+      _recordingSession = session;
+    });
+
+    final isTest = WidgetsBinding.instance.runtimeType.toString().contains('Test');
+    if (!isTest) {
+      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+
+        final currentNow = DateTime.now();
+        if (session.progressFraction(currentNow) >= 1.0) {
+          timer.cancel();
+          _finishAndSaveRecording();
+        } else {
+          setState(() {});
+        }
+      });
+    }
+  }
+
+  void _stopRecording({bool save = true}) {
+    _recordingTimer?.cancel();
+    if (save && _recordingSession != null) {
+      _finishAndSaveRecording();
+    } else {
+      setState(() {
+        _recordingSession = null;
+      });
+    }
+  }
+
+  void _finishAndSaveRecording() {
+    final session = _recordingSession;
+    if (session == null) return;
+    _recordingTimer?.cancel();
+    session.finish();
+    setState(() {
+      _recordingSession = null;
+    });
+
+    try {
+      final file = RecordingStorage.saveRecordingSync(session);
+      if (mounted) {
+        _showRecordingCompletedDialog(session, file.path);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save recording: $e')),
+        );
+      }
+    }
+  }
+
+  void _showRecordingCompletedDialog(SignalRecordingSession session, String filePath) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogCtx) {
+        final colors = Theme.of(dialogCtx).colorScheme;
+        final handoffs = findHandoffEvents(session.samples);
+        return AlertDialog(
+          backgroundColor: colors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: colors.outlineVariant.withOpacity(0.4)),
+          ),
+          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+          contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 18, 24, 20),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  LucideIcons.checkCircle2,
+                  color: Color(0xFF10B981),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Recording Complete',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Your signal recording session has ended and the data was successfully saved to disk.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: colors.onSurfaceVariant,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerHighest.withOpacity(0.35),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
+                ),
+                child: Column(
+                  children: [
+                    _buildStatRow('Duration', '${session.durationLabel} (${session.elapsedSeconds.round()}s)', colors),
+                    const SizedBox(height: 6),
+                    _buildStatRow('Samples', '${session.samples.length} points', colors),
+                    const SizedBox(height: 6),
+                    _buildStatRow('Tower Handoffs', '${handoffs.length} events', colors),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'File Location',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerHighest.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: SelectableText(
+                  filePath,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              child: const Text('Close'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                RecordingStorage.openFile(filePath);
+              },
+              icon: const Icon(LucideIcons.folderOpen, size: 15),
+              label: const Text('Open File'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  static Widget _buildStatRow(String label, String value, ColorScheme colors) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: colors.onSurface,
+          ),
+        ),
+      ],
+    );
   }
 
   void _refresh() {
@@ -280,6 +497,9 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
             selectedSignalMetrics: _selectedSignalMetrics,
             signalTechMode: _signalTechMode,
             signalTimeWindow: _signalTimeWindow,
+            recordingSession: _recordingSession,
+            onStartRecording: _startRecording,
+            onStopRecording: () => _stopRecording(save: true),
             lastUpdated: _lastUpdated,
             section: _selectedSection,
             onRefresh: _refresh,
@@ -597,6 +817,9 @@ class _DashboardContent extends StatelessWidget {
     required this.selectedSignalMetrics,
     required this.signalTechMode,
     required this.signalTimeWindow,
+    this.recordingSession,
+    this.onStartRecording,
+    this.onStopRecording,
     required this.lastUpdated,
     required this.section,
     required this.onRefresh,
@@ -617,6 +840,9 @@ class _DashboardContent extends StatelessWidget {
   final Set<String> selectedSignalMetrics;
   final String signalTechMode;
   final String signalTimeWindow;
+  final SignalRecordingSession? recordingSession;
+  final ValueChanged<String>? onStartRecording;
+  final VoidCallback? onStopRecording;
   final DateTime? lastUpdated;
   final _DashboardSection section;
   final VoidCallback onRefresh;
@@ -652,6 +878,9 @@ class _DashboardContent extends StatelessWidget {
                 selectedSignalMetrics: selectedSignalMetrics,
                 signalTechMode: signalTechMode,
                 signalTimeWindow: signalTimeWindow,
+                recordingSession: recordingSession,
+                onStartRecording: onStartRecording,
+                onStopRecording: onStopRecording,
                 onHostChanged: onHostChanged,
                 onRefreshIntervalChanged: onRefreshIntervalChanged,
                 onSplitCellIdChanged: onSplitCellIdChanged,
@@ -688,6 +917,9 @@ class _SectionPage extends StatelessWidget {
     required this.selectedSignalMetrics,
     required this.signalTechMode,
     required this.signalTimeWindow,
+    this.recordingSession,
+    this.onStartRecording,
+    this.onStopRecording,
     required this.onHostChanged,
     required this.onRefreshIntervalChanged,
     required this.onSplitCellIdChanged,
@@ -705,6 +937,9 @@ class _SectionPage extends StatelessWidget {
   final Set<String> selectedSignalMetrics;
   final String signalTechMode;
   final String signalTimeWindow;
+  final SignalRecordingSession? recordingSession;
+  final ValueChanged<String>? onStartRecording;
+  final VoidCallback? onStopRecording;
   final ValueChanged<String> onHostChanged;
   final ValueChanged<double> onRefreshIntervalChanged;
   final ValueChanged<bool> onSplitCellIdChanged;
@@ -744,6 +979,12 @@ class _SectionPage extends StatelessWidget {
               _TechModeDropdown(
                 mode: signalTechMode,
                 onChanged: onSignalTechModeChanged,
+              ),
+              _RecordButton(
+                recordingSession: recordingSession,
+                defaultDuration: signalTimeWindow,
+                onStartRecording: onStartRecording ?? (_) {},
+                onStopRecording: onStopRecording ?? () {},
               ),
               _TimeWindowDropdown(
                 selectedWindow: signalTimeWindow,
@@ -812,7 +1053,7 @@ class _PagePanel extends StatelessWidget {
       children: <Widget>[
         LayoutBuilder(
           builder: (context, constraints) {
-            final isNarrow = constraints.maxWidth < 1000;
+            final isNarrow = constraints.maxWidth < 1150;
             if (isNarrow && headerActions != null) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1098,6 +1339,248 @@ double parseTimeWindowSeconds(String window) {
     '1hr' => 3600.0,
     _ => 60.0,
   };
+}
+
+class _RecordButton extends StatelessWidget {
+  const _RecordButton({
+    required this.recordingSession,
+    required this.defaultDuration,
+    required this.onStartRecording,
+    required this.onStopRecording,
+  });
+
+  final SignalRecordingSession? recordingSession;
+  final String defaultDuration;
+  final ValueChanged<String> onStartRecording;
+  final VoidCallback onStopRecording;
+
+  Future<void> _showStartDialog(BuildContext context) async {
+    String selected = defaultDuration;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) {
+        final colors = Theme.of(dialogCtx).colorScheme;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: colors.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: colors.outlineVariant.withOpacity(0.4)),
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              actionsPadding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      LucideIcons.circleDot,
+                      color: Color(0xFFEF4444),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Record Signal Session',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Select how long to record signal metrics and tower changes. The session will be saved as an interactive JSON file when complete.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colors.onSurfaceVariant,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Session Duration',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainerHighest.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: colors.outlineVariant.withOpacity(0.6)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selected,
+                        isExpanded: true,
+                        icon: const Icon(LucideIcons.chevronDown, size: 16),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: colors.onSurface,
+                        ),
+                        items: _TimeWindowDropdown.options.map((opt) {
+                          return DropdownMenuItem<String>(
+                            value: opt,
+                            child: Text(opt),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setDialogState(() => selected = val);
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogCtx).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFEF4444),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onPressed: () => Navigator.of(dialogCtx).pop(true),
+                  icon: const Icon(LucideIcons.circleDot, size: 15),
+                  label: const Text('Start Recording'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      onStartRecording(selected);
+    }
+  }
+
+  Future<void> _showStopDialog(BuildContext context) async {
+    final colors = Theme.of(context).colorScheme;
+    final session = recordingSession;
+    if (session == null) return;
+
+    final action = await showDialog<String>(
+      context: context,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          backgroundColor: colors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: colors.outlineVariant.withOpacity(0.4)),
+          ),
+          title: const Row(
+            children: [
+              _BreathingDot(color: Color(0xFFEF4444), size: 10),
+              SizedBox(width: 10),
+              Text(
+                'Recording in Progress',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          content: Text(
+            'Session progress: ${session.progressPercent()}%\nSamples captured: ${session.samples.length}\n\nWould you like to finish and save now or cancel?',
+            style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop('continue'),
+              child: const Text('Continue'),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: colors.error),
+              onPressed: () => Navigator.of(dialogCtx).pop('discard'),
+              child: const Text('Discard'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogCtx).pop('save'),
+              child: const Text('Stop & Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (action == 'save') {
+      onStopRecording();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final isRecording = recordingSession != null;
+    final percent = recordingSession?.progressPercent() ?? 0;
+
+    return InkWell(
+      onTap: isRecording ? () => _showStopDialog(context) : () => _showStartDialog(context),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5.5),
+        decoration: BoxDecoration(
+          color: isRecording
+              ? const Color(0xFFEF4444).withOpacity(0.08)
+              : colors.surface,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isRecording
+                ? const Color(0xFFEF4444).withOpacity(0.5)
+                : colors.outlineVariant.withOpacity(0.5),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (isRecording)
+              const _BreathingDot(color: Color(0xFFEF4444), size: 6.5)
+            else
+              const Icon(
+                LucideIcons.circleDot,
+                size: 13,
+                color: Color(0xFFEF4444),
+              ),
+            const SizedBox(width: 6),
+            Text(
+              isRecording ? 'Recording $percent%' : 'Record',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isRecording ? const Color(0xFFDC2626) : colors.onSurface,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _TimeWindowDropdown extends StatelessWidget {

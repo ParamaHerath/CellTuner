@@ -297,17 +297,24 @@ class RecordingStorage {
     return 'signal_recording_${year}-${month}-${day}_${hour}${minute}${second}.json';
   }
 
-  static Future<File> saveRecording(
+  static File saveRecordingSync(
     SignalRecordingSession session, {
     Directory? directory,
-  }) async {
+  }) {
     final targetDir = directory ?? getRecordingsDirectory();
     final filename = generateFilename(session.startTime);
     final file = File('${targetDir.path}${Platform.pathSeparator}$filename');
     const encoder = JsonEncoder.withIndent('  ');
     final jsonStr = encoder.convert(session.toJson());
-    await file.writeAsString(jsonStr);
+    file.writeAsStringSync(jsonStr);
     return file;
+  }
+
+  static Future<File> saveRecording(
+    SignalRecordingSession session, {
+    Directory? directory,
+  }) async {
+    return saveRecordingSync(session, directory: directory);
   }
 
   static Future<void> openFile(String filePath) async {
