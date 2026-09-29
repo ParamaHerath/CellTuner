@@ -5,6 +5,9 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'router/router_api_client.dart';
 import 'router/router_snapshot.dart';
+import 'recording_session.dart';
+
+export 'recording_session.dart';
 
 void main() {
   runApp(const CellTunerApp());
@@ -1143,132 +1146,7 @@ class _TimeWindowDropdown extends StatelessWidget {
   }
 }
 
-class SignalMetricSample {
-  const SignalMetricSample({
-    required this.timestamp,
-    required this.rssiLte,
-    required this.rssiNr5g,
-    required this.rsrpLte,
-    required this.rsrpNr5g,
-    required this.rsrqLte,
-    required this.rsrqNr5g,
-    required this.sinrLte,
-    required this.sinrNr5g,
-    this.cellIdLte,
-    this.cellIdNr5g,
-  });
 
-  final DateTime timestamp;
-  final double? rssiLte;
-  final double? rssiNr5g;
-  final double? rsrpLte;
-  final double? rsrpNr5g;
-  final double? rsrqLte;
-  final double? rsrqNr5g;
-  final double? sinrLte;
-  final double? sinrNr5g;
-  final String? cellIdLte;
-  final String? cellIdNr5g;
-
-  double? getValue(String key, {required bool is5g}) {
-    return switch (key.toUpperCase()) {
-      'RSSI' => is5g ? rssiNr5g : rssiLte,
-      'RSRP' => is5g ? rsrpNr5g : rsrpLte,
-      'RSRQ' => is5g ? rsrqNr5g : rsrqLte,
-      'SINR' => is5g ? sinrNr5g : sinrLte,
-      _ => null,
-    };
-  }
-}
-
-class TowerHandoffEvent {
-  const TowerHandoffEvent({
-    required this.timestamp,
-    required this.prevLte,
-    required this.newLte,
-    required this.prevNr5g,
-    required this.newNr5g,
-  });
-
-  final DateTime timestamp;
-  final String? prevLte;
-  final String? newLte;
-  final String? prevNr5g;
-  final String? newNr5g;
-
-  String formatChange(bool split) {
-    final lteChanged = prevLte != null &&
-        newLte != null &&
-        prevLte!.isNotEmpty &&
-        newLte!.isNotEmpty &&
-        prevLte != '-' &&
-        newLte != '-' &&
-        prevLte != newLte;
-
-    final nrChanged = prevNr5g != null &&
-        newNr5g != null &&
-        prevNr5g!.isNotEmpty &&
-        newNr5g!.isNotEmpty &&
-        prevNr5g != '-' &&
-        newNr5g != '-' &&
-        prevNr5g != newNr5g;
-
-    if (lteChanged && nrChanged) {
-      final pLte = split ? _formatCellIdString(prevLte!, is5g: false) : prevLte!;
-      final nLte = split ? _formatCellIdString(newLte!, is5g: false) : newLte!;
-      final pNr = split ? _formatCellIdString(prevNr5g!, is5g: true) : prevNr5g!;
-      final nNr = split ? _formatCellIdString(newNr5g!, is5g: true) : newNr5g!;
-      return '$pLte / $pNr → $nLte / $nNr';
-    } else if (lteChanged) {
-      final pLte = split ? _formatCellIdString(prevLte!, is5g: false) : prevLte!;
-      final nLte = split ? _formatCellIdString(newLte!, is5g: false) : newLte!;
-      return '$pLte → $nLte';
-    } else if (nrChanged) {
-      final pNr = split ? _formatCellIdString(prevNr5g!, is5g: true) : prevNr5g!;
-      final nNr = split ? _formatCellIdString(newNr5g!, is5g: true) : newNr5g!;
-      return '$pNr → $nNr';
-    }
-
-    return 'Tower Changed';
-  }
-}
-
-List<TowerHandoffEvent> findHandoffEvents(List<SignalMetricSample> history) {
-  final list = <TowerHandoffEvent>[];
-  if (history.length < 2) return list;
-
-  for (var i = 1; i < history.length; i++) {
-    final prev = history[i - 1];
-    final curr = history[i];
-
-    final lteChanged = prev.cellIdLte != null &&
-        curr.cellIdLte != null &&
-        prev.cellIdLte!.isNotEmpty &&
-        curr.cellIdLte!.isNotEmpty &&
-        prev.cellIdLte != '-' &&
-        curr.cellIdLte != '-' &&
-        prev.cellIdLte != curr.cellIdLte;
-
-    final nrChanged = prev.cellIdNr5g != null &&
-        curr.cellIdNr5g != null &&
-        prev.cellIdNr5g!.isNotEmpty &&
-        curr.cellIdNr5g!.isNotEmpty &&
-        prev.cellIdNr5g != '-' &&
-        curr.cellIdNr5g != '-' &&
-        prev.cellIdNr5g != curr.cellIdNr5g;
-
-    if (lteChanged || nrChanged) {
-      list.add(TowerHandoffEvent(
-        timestamp: curr.timestamp,
-        prevLte: prev.cellIdLte,
-        newLte: curr.cellIdLte,
-        prevNr5g: prev.cellIdNr5g,
-        newNr5g: curr.cellIdNr5g,
-      ));
-    }
-  }
-  return list;
-}
 
 String _formatHandoffTime(DateTime dt) {
   final h = dt.hour.toString().padLeft(2, '0');
@@ -2906,21 +2784,8 @@ class _SignalTable extends StatelessWidget {
   }
 }
 
-String _formatCellIdString(String raw, {required bool is5g}) {
-  final trimmed = raw.trim();
-  if (trimmed.isEmpty || trimmed == '-') return raw;
-  final val = int.tryParse(trimmed);
-  if (val == null) return raw;
-  if (!is5g) {
-    final enb = val ~/ 256;
-    final sector = val % 256;
-    return '$enb-$sector';
-  } else {
-    final gnb = val ~/ 16384;
-    final sector = val % 16384;
-    return '$gnb-$sector';
-  }
-}
+String _formatCellIdString(String raw, {required bool is5g}) =>
+    formatCellIdString(raw, is5g: is5g);
 
 class _TableCell extends StatelessWidget {
   const _TableCell(this.value, {this.header = false});
