@@ -67,17 +67,23 @@ void main() {
       expect(html, contains('canvas-RSRQ'));
       expect(html, contains('canvas-SINR'));
 
-      // Interactive controls
+      // Interactive controls & Scrub lines
       expect(html, contains('zoomInBtn'));
       expect(html, contains('zoomOutBtn'));
       expect(html, contains('zoomResetBtn'));
       expect(html, contains('techModeGroup'));
       expect(html, contains('cellIdGroup'));
+      expect(html, contains('scrub-RSSI'));
+      expect(html, contains('chart-scrub-line'));
+      expect(html, contains('cursor: default'));
 
-      // Script methods
+      // Script methods & Handoff styling
       expect(html, contains('drawChart'));
       expect(html, contains('calculateDynamicYRange'));
+      expect(html, contains('getFormattedCellId'));
+      expect(html, contains('formatCellIdString'));
       expect(html, contains('setZoom'));
+      expect(html, contains('#111827'));
     });
   });
 }

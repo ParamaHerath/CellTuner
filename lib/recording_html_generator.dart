@@ -314,7 +314,18 @@ String generateRecordingHtml(SignalRecordingSession session) {
       position: relative;
       height: 240px;
       width: 100%;
-      cursor: crosshair;
+      cursor: default;
+    }
+
+    .chart-scrub-line {
+      position: absolute;
+      top: 15px;
+      bottom: 25px;
+      width: 1px;
+      background: #94a3b8;
+      pointer-events: none;
+      display: none;
+      z-index: 50;
     }
 
     canvas {
@@ -327,43 +338,34 @@ String generateRecordingHtml(SignalRecordingSession session) {
     .chart-tooltip {
       position: absolute;
       display: none;
-      background: #1e293b;
+      background: #0f172a;
       color: #ffffff;
-      padding: 8px 12px;
-      border-radius: 8px;
-      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      line-height: 1.35;
       pointer-events: none;
       z-index: 100;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
       white-space: nowrap;
-      transform: translate(-50%, -110%);
+      top: 8px;
+      transform: translateX(-50%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
     }
 
-    .chart-tooltip.handoff-mode {
-      background: #78350f;
-      border: 1px solid #f59e0b;
-    }
-
-    .tooltip-title {
+    .tooltip-time {
       font-weight: 700;
-      margin-bottom: 4px;
       color: #94a3b8;
-      font-size: 11px;
+      font-size: 10px;
+      line-height: 1.2;
     }
 
-    .tooltip-val {
+    .tooltip-cell {
       font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 2px;
-    }
-
-    .tooltip-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      display: inline-block;
+      color: #f8fafc;
+      font-size: 11px;
+      margin-top: 1px;
+      line-height: 1.2;
     }
   </style>
 </head>
@@ -440,6 +442,7 @@ String generateRecordingHtml(SignalRecordingSession session) {
         <div class="chart-scroll-wrapper" id="scroll-RSSI">
           <div class="chart-canvas-container" id="container-RSSI">
             <canvas id="canvas-RSSI"></canvas>
+            <div class="chart-scrub-line" id="scrub-RSSI"></div>
             <div class="chart-tooltip" id="tooltip-RSSI"></div>
           </div>
         </div>
@@ -457,6 +460,7 @@ String generateRecordingHtml(SignalRecordingSession session) {
         <div class="chart-scroll-wrapper" id="scroll-RSRP">
           <div class="chart-canvas-container" id="container-RSRP">
             <canvas id="canvas-RSRP"></canvas>
+            <div class="chart-scrub-line" id="scrub-RSRP"></div>
             <div class="chart-tooltip" id="tooltip-RSRP"></div>
           </div>
         </div>
@@ -474,6 +478,7 @@ String generateRecordingHtml(SignalRecordingSession session) {
         <div class="chart-scroll-wrapper" id="scroll-RSRQ">
           <div class="chart-canvas-container" id="container-RSRQ">
             <canvas id="canvas-RSRQ"></canvas>
+            <div class="chart-scrub-line" id="scrub-RSRQ"></div>
             <div class="chart-tooltip" id="tooltip-RSRQ"></div>
           </div>
         </div>
@@ -491,6 +496,7 @@ String generateRecordingHtml(SignalRecordingSession session) {
         <div class="chart-scroll-wrapper" id="scroll-SINR">
           <div class="chart-canvas-container" id="container-SINR">
             <canvas id="canvas-SINR"></canvas>
+            <div class="chart-scrub-line" id="scrub-SINR"></div>
             <div class="chart-tooltip" id="tooltip-SINR"></div>
           </div>
         </div>
@@ -518,6 +524,47 @@ String generateRecordingHtml(SignalRecordingSession session) {
     const samples = sessionData.samples || [];
     const handoffs = sessionData.handoffs || [];
     const totalDurationSeconds = Math.max(sessionData.session.actualDurationSeconds || sessionData.session.targetDurationSeconds || 60, 1);
+
+    function formatCellIdString(val, is5g) {
+      if (!val || val === '-' || val === 'N/A') return val || '-';
+      const num = parseInt(val, 10);
+      if (isNaN(num)) return val;
+      if (!is5g) {
+        const enb = Math.floor(num / 256);
+        const sector = num % 256;
+        return enb + '-' + sector;
+      } else {
+        const gnb = Math.floor(num / 16384);
+        const sector = num % 16384;
+        return gnb + '-' + sector;
+      }
+    }
+
+    function getFormattedCellId(sample, split) {
+      if (!sample) return 'N/A';
+      let lteVal = sample.cellIdLte || '-';
+      let nr5gVal = sample.cellIdNr5g || '-';
+
+      if (split) {
+        if (lteVal !== '-') lteVal = formatCellIdString(lteVal, false);
+        if (nr5gVal !== '-') nr5gVal = formatCellIdString(nr5gVal, true);
+      }
+
+      if (currentTechMode === '4g') {
+        return lteVal !== '-' ? lteVal : 'N/A';
+      } else if (currentTechMode === '5g') {
+        return nr5gVal !== '-' ? nr5gVal : 'N/A';
+      }
+
+      if (lteVal !== '-' && nr5gVal !== '-' && lteVal !== nr5gVal) {
+        return lteVal + ' / ' + nr5gVal;
+      } else if (lteVal !== '-') {
+        return lteVal;
+      } else if (nr5gVal !== '-') {
+        return nr5gVal;
+      }
+      return 'N/A';
+    }
 
     function formatTimeLabel(seconds) {
       if (seconds <= 0) return '0s';
@@ -755,6 +802,7 @@ String generateRecordingHtml(SignalRecordingSession session) {
       const container = document.getElementById('container-' + key);
       const scrollWrapper = document.getElementById('scroll-' + key);
       const tooltip = document.getElementById('tooltip-' + key);
+      const scrubLine = document.getElementById('scrub-' + key);
 
       container.addEventListener('mousemove', (e) => {
         const rect = container.getBoundingClientRect();
@@ -765,31 +813,16 @@ String generateRecordingHtml(SignalRecordingSession session) {
 
         if (mouseX < chartLeft || mouseX > chartRight || samples.length === 0) {
           tooltip.style.display = 'none';
+          if (scrubLine) scrubLine.style.display = 'none';
           return;
+        }
+
+        if (scrubLine) {
+          scrubLine.style.display = 'block';
+          scrubLine.style.left = mouseX + 'px';
         }
 
         const elapsedAtMouse = ((mouseX - chartLeft) / chartWidth) * totalDurationSeconds;
-
-        // Check if close to a handoff line (within 8px)
-        let matchedHandoff = null;
-        for (const h of handoffs) {
-          const hX = chartLeft + (h.elapsedSeconds / totalDurationSeconds) * chartWidth;
-          if (Math.abs(mouseX - hX) < 8) {
-            matchedHandoff = h;
-            break;
-          }
-        }
-
-        if (matchedHandoff) {
-          tooltip.className = 'chart-tooltip handoff-mode';
-          const time = new Date(matchedHandoff.timestamp).toLocaleTimeString();
-          const changeText = currentSplitCellId ? matchedHandoff.formattedSplit : matchedHandoff.formattedRaw;
-          tooltip.innerHTML = '<div class="tooltip-title">Handoff · ' + time + '</div><div style="font-weight:700;">' + changeText + '</div>';
-          tooltip.style.display = 'block';
-          tooltip.style.left = mouseX + 'px';
-          tooltip.style.top = '45px';
-          return;
-        }
 
         // Closest sample
         let closest = samples[0];
@@ -802,26 +835,17 @@ String generateRecordingHtml(SignalRecordingSession session) {
           }
         }
 
-        tooltip.className = 'chart-tooltip';
         const time = new Date(closest.timestamp).toLocaleTimeString();
-        const lteVal = closest[key.toLowerCase() + 'Lte'];
-        const nrVal = closest[key.toLowerCase() + 'Nr5g'];
+        const cellId = getFormattedCellId(closest, currentSplitCellId);
 
-        let content = '<div class="tooltip-title">' + time + ' (' + formatTimeLabel(closest.elapsedSeconds) + ')</div>';
-        if (currentTechMode !== '5g') {
-          content += '<div class="tooltip-val" style="color:#00A83B;"><span class="tooltip-dot" style="background:#00A83B;"></span>4G: ' + (lteVal != null ? lteVal + ' ' + unit : '-') + '</div>';
-        }
-        if (currentTechMode !== '4g') {
-          content += '<div class="tooltip-val" style="color:#60a5fa;"><span class="tooltip-dot" style="background:#003BFF;"></span>5G: ' + (nrVal != null ? nrVal + ' ' + unit : '-') + '</div>';
-        }
-        if (closest.cellIdLte) {
-          content += '<div style="font-size:10px; color:#94a3b8; margin-top:4px;">Cell ID: ' + closest.cellIdLte + '</div>';
-        }
-
-        tooltip.innerHTML = content;
+        tooltip.innerHTML = '<div class="tooltip-time">' + time + '</div><div class="tooltip-cell">Cell ID: ' + cellId + '</div>';
         tooltip.style.display = 'block';
-        tooltip.style.left = mouseX + 'px';
-        tooltip.style.top = '55px';
+
+        const tooltipWidth = tooltip.offsetWidth || 110;
+        const halfW = tooltipWidth / 2;
+        const clampedLeft = Math.max(chartLeft + halfW, Math.min(chartRight - halfW, mouseX));
+        tooltip.style.left = clampedLeft + 'px';
+        tooltip.style.top = '8px';
 
         // Update header badge dynamically on scrub
         updateHeaderBadge(key, closest);
@@ -829,6 +853,7 @@ String generateRecordingHtml(SignalRecordingSession session) {
 
       container.addEventListener('mouseleave', () => {
         tooltip.style.display = 'none';
+        if (scrubLine) scrubLine.style.display = 'none';
         const latest = samples.length > 0 ? samples[samples.length - 1] : null;
         updateHeaderBadge(key, latest);
       });
