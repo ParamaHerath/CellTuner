@@ -8,7 +8,6 @@ String generateRecordingHtml(SignalRecordingSession session) {
   final startTimeStr = session.startTime.toLocal().toString().split('.').first;
   final durationLabel = session.durationLabel;
   final sampleCount = session.samples.length;
-  final handoffCount = findHandoffEvents(session.samples).length;
 
   return '''<!DOCTYPE html>
 <html lang="en">
@@ -122,18 +121,6 @@ String generateRecordingHtml(SignalRecordingSession session) {
       font-weight: 600;
       border: 1px solid var(--border);
       background: var(--surface-subtle);
-    }
-
-    .badge.router {
-      color: var(--primary);
-      background: rgba(0, 59, 255, 0.06);
-      border-color: rgba(0, 59, 255, 0.2);
-    }
-
-    .badge.handoff {
-      color: #b45309;
-      background: rgba(245, 158, 11, 0.1);
-      border-color: rgba(245, 158, 11, 0.25);
     }
 
     /* Controls Bar */
@@ -266,29 +253,29 @@ String generateRecordingHtml(SignalRecordingSession session) {
     .series-badge {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
       padding: 3px 8px;
       border-radius: 5px;
-      font-size: 12px;
-      font-weight: 600;
+      font-size: 11px;
+      font-weight: 700;
+      border: none;
     }
 
     .series-badge.lte {
-      background: rgba(0, 168, 59, 0.1);
+      background: #D1FAE5;
       color: var(--lte);
-      border: 1px solid rgba(0, 168, 59, 0.25);
     }
 
     .series-badge.nr5g {
-      background: rgba(0, 59, 255, 0.1);
+      background: #E0E7FF;
       color: var(--nr5g);
-      border: 1px solid rgba(0, 59, 255, 0.25);
     }
 
     .series-dot {
       width: 6px;
       height: 6px;
       border-radius: 50%;
+      flex-shrink: 0;
     }
 
     .series-badge.lte .series-dot { background: var(--lte); }
@@ -400,19 +387,12 @@ String generateRecordingHtml(SignalRecordingSession session) {
         </div>
 
         <div class="meta-badges">
-          <div class="badge router">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-            \${sessionData.session.routerHost}
-          </div>
           <div class="badge">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             $durationLabel ($sampleCount samples)
           </div>
-          <div class="badge handoff">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
-            $handoffCount Tower Handoff\${sessionData.session.handoffCount === 1 ? '' : 's'}
-          </div>
           <div class="badge">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             $startTimeStr
           </div>
         </div>
@@ -454,8 +434,8 @@ String generateRecordingHtml(SignalRecordingSession session) {
         <div class="metric-card-header">
           <div class="metric-card-title">RSSI (Received Signal Strength)</div>
           <div class="metric-card-badges">
-            <div class="series-badge lte" id="badge-RSSI-lte"><span class="series-dot"></span><span>4G: - dBm</span></div>
-            <div class="series-badge nr5g" id="badge-RSSI-nr5g"><span class="series-dot"></span><span>5G: - dBm</span></div>
+            <div class="series-badge lte" id="badge-RSSI-lte"><span class="series-dot"></span><span>4G: N/A</span></div>
+            <div class="series-badge nr5g" id="badge-RSSI-nr5g"><span class="series-dot"></span><span>5G: N/A</span></div>
           </div>
         </div>
         <div class="chart-scroll-wrapper" id="scroll-RSSI">
@@ -471,8 +451,8 @@ String generateRecordingHtml(SignalRecordingSession session) {
         <div class="metric-card-header">
           <div class="metric-card-title">RSRP (Reference Signal Received Power)</div>
           <div class="metric-card-badges">
-            <div class="series-badge lte" id="badge-RSRP-lte"><span class="series-dot"></span><span>4G: - dBm</span></div>
-            <div class="series-badge nr5g" id="badge-RSRP-nr5g"><span class="series-dot"></span><span>5G: - dBm</span></div>
+            <div class="series-badge lte" id="badge-RSRP-lte"><span class="series-dot"></span><span>4G: N/A</span></div>
+            <div class="series-badge nr5g" id="badge-RSRP-nr5g"><span class="series-dot"></span><span>5G: N/A</span></div>
           </div>
         </div>
         <div class="chart-scroll-wrapper" id="scroll-RSRP">
@@ -488,8 +468,8 @@ String generateRecordingHtml(SignalRecordingSession session) {
         <div class="metric-card-header">
           <div class="metric-card-title">RSRQ (Reference Signal Received Quality)</div>
           <div class="metric-card-badges">
-            <div class="series-badge lte" id="badge-RSRQ-lte"><span class="series-dot"></span><span>4G: - dB</span></div>
-            <div class="series-badge nr5g" id="badge-RSRQ-nr5g"><span class="series-dot"></span><span>5G: - dB</span></div>
+            <div class="series-badge lte" id="badge-RSRQ-lte"><span class="series-dot"></span><span>4G: N/A</span></div>
+            <div class="series-badge nr5g" id="badge-RSRQ-nr5g"><span class="series-dot"></span><span>5G: N/A</span></div>
           </div>
         </div>
         <div class="chart-scroll-wrapper" id="scroll-RSRQ">
@@ -505,8 +485,8 @@ String generateRecordingHtml(SignalRecordingSession session) {
         <div class="metric-card-header">
           <div class="metric-card-title">SINR (Signal to Interference & Noise)</div>
           <div class="metric-card-badges">
-            <div class="series-badge lte" id="badge-SINR-lte"><span class="series-dot"></span><span>4G: - dB</span></div>
-            <div class="series-badge nr5g" id="badge-SINR-nr5g"><span class="series-dot"></span><span>5G: - dB</span></div>
+            <div class="series-badge lte" id="badge-SINR-lte"><span class="series-dot"></span><span>4G: N/A</span></div>
+            <div class="series-badge nr5g" id="badge-SINR-nr5g"><span class="series-dot"></span><span>5G: N/A</span></div>
           </div>
         </div>
         <div class="chart-scroll-wrapper" id="scroll-SINR">
@@ -760,8 +740,10 @@ String generateRecordingHtml(SignalRecordingSession session) {
       lteBadge.style.display = (currentTechMode === 'both' || currentTechMode === '4g') ? 'inline-flex' : 'none';
       nrBadge.style.display = (currentTechMode === 'both' || currentTechMode === '5g') ? 'inline-flex' : 'none';
 
-      lteBadge.querySelector('span:last-child').textContent = '4G: ' + (lteVal != null ? lteVal + ' ' + cfg.unit : '-');
-      nrBadge.querySelector('span:last-child').textContent = '5G: ' + (nrVal != null ? nrVal + ' ' + cfg.unit : '-');
+      const lteText = lteVal != null ? Math.round(lteVal) + cfg.unit : 'N/A';
+      const nrText = nrVal != null ? Math.round(nrVal) + cfg.unit : 'N/A';
+      lteBadge.querySelector('span:last-child').textContent = '4G: ' + lteText;
+      nrBadge.querySelector('span:last-child').textContent = '5G: ' + nrText;
     }
 
     function renderAllCharts() {
