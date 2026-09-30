@@ -237,6 +237,13 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
     }
   }
 
+  void _resetSignalGraphs() {
+    setState(() {
+      _signalHistory.clear();
+    });
+    _refresh();
+  }
+
   void _finishAndSaveRecording() {
     final session = _recordingSession;
     if (session == null) return;
@@ -541,6 +548,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
             onSignalTimeWindowChanged: (window) {
               setState(() => _signalTimeWindow = window);
             },
+            onResetSignalGraphs: _resetSignalGraphs,
           ),
         );
       },
@@ -855,6 +863,7 @@ class _DashboardContent extends StatelessWidget {
     required this.onSelectedSignalMetricsChanged,
     required this.onSignalTechModeChanged,
     required this.onSignalTimeWindowChanged,
+    this.onResetSignalGraphs,
     this.isMobile = false,
   });
 
@@ -878,6 +887,7 @@ class _DashboardContent extends StatelessWidget {
   final ValueChanged<Set<String>> onSelectedSignalMetricsChanged;
   final ValueChanged<String> onSignalTechModeChanged;
   final ValueChanged<String> onSignalTimeWindowChanged;
+  final VoidCallback? onResetSignalGraphs;
   final bool isMobile;
 
   @override
@@ -913,6 +923,7 @@ class _DashboardContent extends StatelessWidget {
                 onSelectedSignalMetricsChanged: onSelectedSignalMetricsChanged,
                 onSignalTechModeChanged: onSignalTechModeChanged,
                 onSignalTimeWindowChanged: onSignalTimeWindowChanged,
+                onResetSignalGraphs: onResetSignalGraphs,
               ),
               const SizedBox(height: 40),
               Text(
@@ -952,6 +963,7 @@ class _SectionPage extends StatelessWidget {
     required this.onSelectedSignalMetricsChanged,
     required this.onSignalTechModeChanged,
     required this.onSignalTimeWindowChanged,
+    this.onResetSignalGraphs,
   });
 
   final _DashboardSection section;
@@ -972,6 +984,7 @@ class _SectionPage extends StatelessWidget {
   final ValueChanged<Set<String>> onSelectedSignalMetricsChanged;
   final ValueChanged<String> onSignalTechModeChanged;
   final ValueChanged<String> onSignalTimeWindowChanged;
+  final VoidCallback? onResetSignalGraphs;
 
   @override
   Widget build(BuildContext context) {
@@ -1015,6 +1028,9 @@ class _SectionPage extends StatelessWidget {
                 defaultDuration: signalTimeWindow,
                 onStartRecording: onStartRecording ?? (_) {},
                 onStopRecording: onStopRecording ?? () {},
+              ),
+              _ResetGraphsButton(
+                onReset: onResetSignalGraphs ?? () {},
               ),
             ],
           ),
@@ -1079,7 +1095,7 @@ class _PagePanel extends StatelessWidget {
       children: <Widget>[
         LayoutBuilder(
           builder: (context, constraints) {
-            final isNarrow = constraints.maxWidth < 1150;
+            final isNarrow = constraints.maxWidth < 1180;
             if (isNarrow && headerActions != null) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1726,6 +1742,44 @@ class _TimeWindowDropdown extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ResetGraphsButton extends StatelessWidget {
+  const _ResetGraphsButton({
+    required this.onReset,
+  });
+
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: 'Reset and restart graphs',
+      child: InkWell(
+        onTap: onReset,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 9),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: colors.outlineVariant.withOpacity(0.5),
+            ),
+          ),
+          child: Center(
+            child: Icon(
+              LucideIcons.rotateCw,
+              size: 14,
+              color: colors.onSurface,
+            ),
+          ),
+        ),
       ),
     );
   }

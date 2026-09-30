@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cell_tuner/main.dart';
 import 'package:cell_tuner/router/router_snapshot.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 void main() {
   testWidgets('shows router signal data', (WidgetTester tester) async {
@@ -232,6 +233,11 @@ void main() {
 
     expect(find.text('Recording Complete'), findsNothing);
     expect(find.text('Record'), findsOneWidget);
+
+    // Verify reset graphs button exists and can be tapped
+    expect(find.byTooltip('Reset and restart graphs'), findsOneWidget);
+    await tester.tap(find.byTooltip('Reset and restart graphs'));
+    await tester.pumpAndSettle();
 
     debugDefaultTargetPlatformOverride = null;
   });
