@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -265,117 +266,135 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
       builder: (dialogCtx) {
         final colors = Theme.of(dialogCtx).colorScheme;
         final handoffs = findHandoffEvents(session.samples);
-        return AlertDialog(
-          backgroundColor: colors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: colors.outlineVariant.withOpacity(0.4)),
-          ),
-          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-          contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-          actionsPadding: const EdgeInsets.fromLTRB(24, 18, 24, 20),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withOpacity(0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  LucideIcons.checkCircle2,
-                  color: Color(0xFF10B981),
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'Recording Complete',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Your signal recording session has ended. Interactive HTML report and JSON data were successfully saved.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: colors.onSurfaceVariant,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: colors.surfaceContainerHighest.withOpacity(0.35),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
-                ),
-                child: Column(
-                  children: [
-                    _buildStatRow('Duration', '${session.durationLabel} (${session.elapsedSeconds.round()}s)', colors),
-                    const SizedBox(height: 6),
-                    _buildStatRow('Samples', '${session.samples.length} points', colors),
-                    const SizedBox(height: 6),
-                    _buildStatRow('Tower Handoffs', '${handoffs.length} events', colors),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'Interactive HTML Report',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: colors.surfaceContainerHighest.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: SelectableText(
-                  result.htmlFile.path,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontFamily: 'monospace',
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+          child: AlertDialog(
+            backgroundColor: colors.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: BorderSide(color: colors.outlineVariant.withOpacity(0.4)),
+            ),
+            titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+            contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+            actionsPadding: const EdgeInsets.fromLTRB(24, 18, 24, 20),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    LucideIcons.checkCircle2,
+                    color: Color(0xFF10B981),
+                    size: 20,
                   ),
                 ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Recording Complete',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your signal recording session has ended. Interactive HTML report and JSON data were successfully saved.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colors.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceContainerHighest.withOpacity(0.35),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildStatRow('Duration', '${session.durationLabel} (${session.elapsedSeconds.round()}s)', colors),
+                      const SizedBox(height: 6),
+                      _buildStatRow('Samples', '${session.samples.length} points', colors),
+                      const SizedBox(height: 6),
+                      _buildStatRow('Tower Handoffs', '${handoffs.length} events', colors),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Interactive HTML Report',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceContainerHighest.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: SelectableText(
+                    result.htmlFile.path,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                style: TextButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onPressed: () => Navigator.of(dialogCtx).pop(),
+                child: const Text('Close'),
+              ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onPressed: () {
+                  RecordingStorage.openFile(result.htmlFile.path);
+                },
+                icon: const Icon(LucideIcons.folderOpen, size: 15),
+                label: const Text('Open File'),
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onPressed: () {
+                  RecordingStorage.openInBrowser(result.htmlFile.path);
+                },
+                icon: const Icon(LucideIcons.externalLink, size: 15),
+                label: const Text('Open Report'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(),
-              child: const Text('Close'),
-            ),
-            OutlinedButton.icon(
-              onPressed: () {
-                RecordingStorage.openFile(result.htmlFile.path);
-              },
-              icon: const Icon(LucideIcons.folderOpen, size: 15),
-              label: const Text('Open File'),
-            ),
-            FilledButton.icon(
-              onPressed: () {
-                RecordingStorage.openInBrowser(result.htmlFile.path);
-              },
-              icon: const Icon(LucideIcons.externalLink, size: 15),
-              label: const Text('Open Report'),
-            ),
-          ],
         );
       },
     );
@@ -1369,114 +1388,132 @@ class _RecordButton extends StatelessWidget {
         final colors = Theme.of(dialogCtx).colorScheme;
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: colors.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-                side: BorderSide(color: colors.outlineVariant.withOpacity(0.4)),
-              ),
-              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-              contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-              actionsPadding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-              title: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444).withOpacity(0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      LucideIcons.circleDot,
-                      color: Color(0xFFEF4444),
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Record Signal Session',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Select how long to record signal metrics and tower changes. The session will be saved as an interactive JSON file when complete.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: colors.onSurfaceVariant,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    'Session Duration',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: colors.surfaceContainerHighest.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: colors.outlineVariant.withOpacity(0.6)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: selected,
-                        isExpanded: true,
-                        icon: const Icon(LucideIcons.chevronDown, size: 16),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: colors.onSurface,
-                        ),
-                        items: _TimeWindowDropdown.options.map((opt) {
-                          return DropdownMenuItem<String>(
-                            value: opt,
-                            child: Text(opt),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setDialogState(() => selected = val);
-                          }
-                        },
+            return BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+              child: AlertDialog(
+                backgroundColor: colors.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(color: colors.outlineVariant.withOpacity(0.4)),
+                ),
+                titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                actionsPadding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                title: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444).withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        LucideIcons.circleDot,
+                        color: Color(0xFFEF4444),
+                        size: 18,
                       ),
                     ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Record Signal Session',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => Navigator.of(dialogCtx).pop(false),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: colors.surfaceContainerHighest.withOpacity(0.6),
+                        ),
+                        child: Icon(
+                          LucideIcons.x,
+                          size: 15,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Select how long to record signal metrics and tower changes. The session will be saved as an interactive JSON file when complete.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: colors.onSurfaceVariant,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Session Duration',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: colors.surfaceContainerHighest.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: colors.outlineVariant.withOpacity(0.6)),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selected,
+                          isExpanded: true,
+                          isDense: true,
+                          icon: const Icon(LucideIcons.chevronDown, size: 14),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: colors.onSurface,
+                          ),
+                          items: _TimeWindowDropdown.options.map((opt) {
+                            return DropdownMenuItem<String>(
+                              value: opt,
+                              child: Text(opt),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setDialogState(() => selected = val);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFEF4444),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: () => Navigator.of(dialogCtx).pop(true),
+                    icon: const Icon(LucideIcons.circleDot, size: 15),
+                    label: const Text('Start Recording'),
                   ),
                 ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogCtx).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFEF4444),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onPressed: () => Navigator.of(dialogCtx).pop(true),
-                  icon: const Icon(LucideIcons.circleDot, size: 15),
-                  label: const Text('Start Recording'),
-                ),
-              ],
             );
           },
         );
@@ -1496,41 +1533,80 @@ class _RecordButton extends StatelessWidget {
     final action = await showDialog<String>(
       context: context,
       builder: (dialogCtx) {
-        return AlertDialog(
-          backgroundColor: colors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: colors.outlineVariant.withOpacity(0.4)),
-          ),
-          title: const Row(
-            children: [
-              _BreathingDot(color: Color(0xFFEF4444), size: 10),
-              SizedBox(width: 10),
-              Text(
-                'Recording in Progress',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+          child: AlertDialog(
+            backgroundColor: colors.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: BorderSide(color: colors.outlineVariant.withOpacity(0.4)),
+            ),
+            titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+            contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+            actionsPadding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+            title: Row(
+              children: [
+                const _BreathingDot(color: Color(0xFFEF4444), size: 10),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Recording in Progress',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                InkWell(
+                  onTap: () => Navigator.of(dialogCtx).pop('continue'),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: colors.surfaceContainerHighest.withOpacity(0.6),
+                    ),
+                    child: Icon(
+                      LucideIcons.x,
+                      size: 15,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'Session progress: ${session.progressPercent()}%\nSamples captured: ${session.samples.length}\n\nWould you like to finish and save now or cancel?',
+              style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant, height: 1.4),
+            ),
+            actions: [
+              TextButton(
+                style: TextButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onPressed: () => Navigator.of(dialogCtx).pop('continue'),
+                child: const Text('Continue'),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: colors.error,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onPressed: () => Navigator.of(dialogCtx).pop('discard'),
+                child: const Text('Discard'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onPressed: () => Navigator.of(dialogCtx).pop('save'),
+                child: const Text('Stop & Save'),
               ),
             ],
           ),
-          content: Text(
-            'Session progress: ${session.progressPercent()}%\nSamples captured: ${session.samples.length}\n\nWould you like to finish and save now or cancel?',
-            style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant, height: 1.4),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogCtx).pop('continue'),
-              child: const Text('Continue'),
-            ),
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: colors.error),
-              onPressed: () => Navigator.of(dialogCtx).pop('discard'),
-              child: const Text('Discard'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogCtx).pop('save'),
-              child: const Text('Stop & Save'),
-            ),
-          ],
         );
       },
     );
