@@ -69,6 +69,172 @@ void main() {
 
     debugDefaultTargetPlatformOverride = null;
   });
+
+  test('detects tower handoff events with split and non-split cell id formatting', () {
+    final now = DateTime.now();
+    final sample1 = SignalMetricSample(
+      timestamp: now.subtract(const Duration(seconds: 10)),
+      rssiLte: -70,
+      rssiNr5g: null,
+      rsrpLte: -90,
+      rsrpNr5g: null,
+      rsrqLte: -10,
+      rsrqNr5g: null,
+      sinrLte: 15,
+      sinrNr5g: null,
+      cellIdLte: '5285379',
+      cellIdNr5g: null,
+    );
+    final sample2 = SignalMetricSample(
+      timestamp: now.subtract(const Duration(seconds: 5)),
+      rssiLte: -72,
+      rssiNr5g: null,
+      rsrpLte: -92,
+      rsrpNr5g: null,
+      rsrqLte: -11,
+      rsrqNr5g: null,
+      sinrLte: 14,
+      sinrNr5g: null,
+      cellIdLte: '5285380',
+      cellIdNr5g: null,
+    );
+
+    final handoffs = findHandoffEvents([sample1, sample2]);
+    expect(handoffs.length, 1);
+    expect(handoffs.first.formatChange(false), '5285379 → 5285380');
+    expect(handoffs.first.formatChange(true), '20646-3 → 20646-4');
+  });
+
+  test('formats graph x-axis labels correctly for different time windows', () {
+    expect(formatXAxisLabel(60, 60), '-60s');
+    expect(formatXAxisLabel(30, 60), '-30s');
+    expect(formatXAxisLabel(0, 60), 'Now');
+
+    expect(formatXAxisLabel(120, 120), '-2m');
+    expect(formatXAxisLabel(90, 120), '-1m 30s');
+    expect(formatXAxisLabel(60, 120), '-1m');
+
+    expect(formatXAxisLabel(300, 300), '-5m');
+    expect(formatXAxisLabel(150, 300), '-2m 30s');
+
+    expect(formatXAxisLabel(900, 900), '-15m');
+    expect(formatXAxisLabel(1800, 1800), '-30m');
+
+    expect(formatXAxisLabel(3600, 3600), '-1h');
+    expect(formatXAxisLabel(2700, 3600), '-45m');
+  });
+
+  testWidgets('displays time window dropdown and changes selected window',
+      (WidgetTester tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      CellTunerApp(snapshotLoader: () async => _sampleSnapshot()),
+    );
+    await tester.pumpAndSettle();
+
+    // Open sidebar and navigate to Signal page
+    await tester.tap(find.byType(AnimatedIcon));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Signal'));
+    await tester.pumpAndSettle();
+
+    // Check time window dropdown is present with default '1min'
+    expect(find.text('1min'), findsOneWidget);
+
+    // Tap the dropdown to open it
+    await tester.tap(find.text('1min'));
+    await tester.pumpAndSettle();
+
+    // Verify options are present
+    expect(find.text('2min'), findsOneWidget);
+    expect(find.text('5min'), findsOneWidget);
+    expect(find.text('15min'), findsOneWidget);
+    expect(find.text('30min'), findsOneWidget);
+    expect(find.text('1hr'), findsOneWidget);
+
+    // Select 5min
+    await tester.tap(find.text('5min').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('5min'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('opens record session dialog, starts recording, and handles completion',
+      (WidgetTester tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      CellTunerApp(snapshotLoader: () async => _sampleSnapshot()),
+    );
+    await tester.pumpAndSettle();
+
+    // Open sidebar and navigate to Signal page
+    await tester.tap(find.byType(AnimatedIcon));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Signal'));
+    await tester.pumpAndSettle();
+
+    // Verify Record button exists
+    expect(find.text('Record'), findsOneWidget);
+
+    // Tap Record button to open dialog
+    await tester.tap(find.text('Record'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Record Signal Session'), findsOneWidget);
+    expect(find.text('Session Duration'), findsOneWidget);
+    expect(find.text('Start Recording'), findsOneWidget);
+
+    // Tap Start Recording
+    await tester.tap(find.text('Start Recording'));
+    await tester.pumpAndSettle();
+
+    // Dialog should be dismissed, and button should now display Recording
+    expect(find.text('Record Signal Session'), findsNothing);
+    expect(find.textContaining('Recording'), findsOneWidget);
+
+    // Tapping while recording opens recording in progress dialog
+    await tester.tap(find.textContaining('Recording'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recording in Progress'), findsOneWidget);
+    expect(find.text('Stop & Save'), findsOneWidget);
+
+    // Tap Stop & Save
+    await tester.tap(find.text('Stop & Save'));
+    await tester.pumpAndSettle();
+
+    // Completion popup appears
+    expect(find.text('Recording Complete'), findsOneWidget);
+    expect(find.text('Open File'), findsOneWidget);
+    expect(find.text('Open Report'), findsOneWidget);
+
+    // Close completion dialog
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recording Complete'), findsNothing);
+    expect(find.text('Record'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+  });
 }
 
 RouterSnapshot _sampleSnapshot() {
