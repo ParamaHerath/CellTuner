@@ -1006,15 +1006,15 @@ class _SectionPage extends StatelessWidget {
                 mode: signalTechMode,
                 onChanged: onSignalTechModeChanged,
               ),
+              _TimeWindowDropdown(
+                selectedWindow: signalTimeWindow,
+                onChanged: onSignalTimeWindowChanged,
+              ),
               _RecordButton(
                 recordingSession: recordingSession,
                 defaultDuration: signalTimeWindow,
                 onStartRecording: onStartRecording ?? (_) {},
                 onStopRecording: onStopRecording ?? () {},
-              ),
-              _TimeWindowDropdown(
-                selectedWindow: signalTimeWindow,
-                onChanged: onSignalTimeWindowChanged,
               ),
             ],
           ),
@@ -1211,7 +1211,8 @@ class _CellIdBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(6),
@@ -1275,7 +1276,8 @@ class _MetricsDropdown extends StatelessWidget {
           ),
       ],
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: colors.surface,
           borderRadius: BorderRadius.circular(6),
@@ -1316,40 +1318,48 @@ class _TechModeDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: mode,
-          isDense: true,
-          icon: const Icon(LucideIcons.chevronDown, size: 13),
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: colors.onSurface,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.radio, size: 14, color: colors.primary),
+          const SizedBox(width: 8),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: mode,
+              isDense: true,
+              icon: const Icon(LucideIcons.chevronDown, size: 13),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: colors.onSurface,
+              ),
+              items: const [
+                DropdownMenuItem(
+                  value: 'Both (4G & 5G)',
+                  child: Text('Both (4G & 5G)'),
+                ),
+                DropdownMenuItem(
+                  value: '4G LTE Only',
+                  child: Text('4G LTE Only'),
+                ),
+                DropdownMenuItem(
+                  value: '5G NR Only',
+                  child: Text('5G NR Only'),
+                ),
+              ],
+              onChanged: (val) {
+                if (val != null) onChanged(val);
+              },
+            ),
           ),
-          items: const [
-            DropdownMenuItem(
-              value: 'Both (4G & 5G)',
-              child: Text('Both (4G & 5G)'),
-            ),
-            DropdownMenuItem(
-              value: '4G LTE Only',
-              child: Text('4G LTE Only'),
-            ),
-            DropdownMenuItem(
-              value: '5G NR Only',
-              child: Text('5G NR Only'),
-            ),
-          ],
-          onChanged: (val) {
-            if (val != null) onChanged(val);
-          },
-        ),
+        ],
       ),
     );
   }
@@ -1626,7 +1636,8 @@ class _RecordButton extends StatelessWidget {
       onTap: isRecording ? () => _showStopDialog(context) : () => _showStartDialog(context),
       borderRadius: BorderRadius.circular(6),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5.5),
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: isRecording
               ? const Color(0xFFEF4444).withOpacity(0.08)
@@ -1647,10 +1658,10 @@ class _RecordButton extends StatelessWidget {
             else
               const Icon(
                 LucideIcons.circleDot,
-                size: 13,
+                size: 14,
                 color: Color(0xFFEF4444),
               ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
             Text(
               isRecording ? 'Recording $percent%' : 'Record',
               style: TextStyle(
@@ -1681,32 +1692,40 @@ class _TimeWindowDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: selectedWindow,
-          isDense: true,
-          icon: const Icon(LucideIcons.chevronDown, size: 13),
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: colors.onSurface,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.clock, size: 14, color: colors.primary),
+          const SizedBox(width: 8),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selectedWindow,
+              isDense: true,
+              icon: const Icon(LucideIcons.chevronDown, size: 13),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: colors.onSurface,
+              ),
+              items: options.map((opt) {
+                return DropdownMenuItem<String>(
+                  value: opt,
+                  child: Text(opt),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) onChanged(val);
+              },
+            ),
           ),
-          items: options.map((opt) {
-            return DropdownMenuItem<String>(
-              value: opt,
-              child: Text(opt),
-            );
-          }).toList(),
-          onChanged: (val) {
-            if (val != null) onChanged(val);
-          },
-        ),
+        ],
       ),
     );
   }
