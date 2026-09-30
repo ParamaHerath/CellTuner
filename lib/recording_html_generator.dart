@@ -14,7 +14,7 @@ String generateRecordingHtml(SignalRecordingSession session) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CellTuner · Signal Session Report ($filename)</title>
+  <title>CellTuner · Session Report ($filename)</title>
   <style>
     :root {
       --bg: #f8fafc;
@@ -382,7 +382,7 @@ String generateRecordingHtml(SignalRecordingSession session) {
             </svg>
           </div>
           <div class="title-text">
-            <h1>CellTuner · Signal Session Report</h1>
+            <h1>CellTuner · Session Report</h1>
             <p>$filename</p>
           </div>
         </div>
@@ -402,11 +402,11 @@ String generateRecordingHtml(SignalRecordingSession session) {
       <!-- Controls -->
       <div class="controls-bar">
         <div class="control-group">
-          <span class="control-label">Tech Mode:</span>
+          <span class="control-label">Network:</span>
           <div class="btn-group" id="techModeGroup">
-            <button class="active" data-mode="both">Both (4G & 5G)</button>
-            <button data-mode="4g">4G LTE Only</button>
-            <button data-mode="5g">5G NR Only</button>
+            <button class="active" data-mode="both">Both</button>
+            <button data-mode="4g">4G Only</button>
+            <button data-mode="5g">5G Only</button>
           </div>
         </div>
 
@@ -895,7 +895,7 @@ String generateRecordingHtml(SignalRecordingSession session) {
     document.getElementById('zoomOutBtn').addEventListener('click', () => setZoom(currentZoom - ZOOM_STEP));
     document.getElementById('zoomResetBtn').addEventListener('click', () => setZoom(1.0));
 
-    // Tech Mode Buttons
+    // Network Buttons
     document.querySelectorAll('#techModeGroup button').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('#techModeGroup button').forEach(b => b.classList.remove('active'));

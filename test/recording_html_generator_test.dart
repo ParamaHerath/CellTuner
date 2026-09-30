@@ -47,7 +47,7 @@ void main() {
       final html = generateRecordingHtml(session);
 
       expect(html, startsWith('<!DOCTYPE html>'));
-      expect(html, contains('<title>CellTuner · Signal Session Report'));
+      expect(html, contains('<title>CellTuner · Session Report'));
 
       // Embedded session payload
       expect(html, contains('192.168.8.1'));

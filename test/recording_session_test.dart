@@ -115,7 +115,7 @@ void main() {
 
         final rawHtml = await result.htmlFile.readAsString();
         expect(rawHtml, contains('<!DOCTYPE html>'));
-        expect(rawHtml, contains('CellTuner · Signal Session Report'));
+        expect(rawHtml, contains('CellTuner · Session Report'));
       } finally {
         if (tempDir.existsSync()) {
           await tempDir.delete(recursive: true);
