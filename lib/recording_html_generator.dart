@@ -27,7 +27,6 @@ String generateRecordingHtml(SignalRecordingSession session) {
       --primary: #003BFF;
       --lte: #00A83B;
       --nr5g: #003BFF;
-      --handoff: #F59E0B;
     }
 
     * {
@@ -706,23 +705,13 @@ String generateRecordingHtml(SignalRecordingSession session) {
 
         ctx.save();
         ctx.setLineDash([3, 3]);
-        ctx.strokeStyle = '#F59E0B';
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#111827';
+        ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(x, chartTop + 6);
+        ctx.moveTo(x, chartTop);
         ctx.lineTo(x, chartBottom);
         ctx.stroke();
         ctx.restore();
-
-        // Top Pin
-        ctx.beginPath();
-        ctx.arc(x, chartTop + 3, 3.5, 0, Math.PI * 2);
-        ctx.fillStyle = '#F59E0B';
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(x, chartTop + 3, 1.5, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
       }
 
       // Update card header badges with latest values
