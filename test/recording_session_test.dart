@@ -104,13 +104,18 @@ void main() {
       // Test file saving to a temporary directory
       final tempDir = await Directory.systemTemp.createTemp('celltuner_rec_test_');
       try {
-        final savedFile = await RecordingStorage.saveRecording(session, directory: tempDir);
-        expect(savedFile.existsSync(), isTrue);
+        final result = await RecordingStorage.saveRecording(session, directory: tempDir);
+        expect(result.jsonFile.existsSync(), isTrue);
+        expect(result.htmlFile.existsSync(), isTrue);
 
-        final rawContent = await savedFile.readAsString();
+        final rawContent = await result.jsonFile.readAsString();
         final decoded = json.decode(rawContent) as Map<String, dynamic>;
         expect(decoded['version'], '1.0');
         expect(decoded['session']['sampleCount'], 2);
+
+        final rawHtml = await result.htmlFile.readAsString();
+        expect(rawHtml, contains('<!DOCTYPE html>'));
+        expect(rawHtml, contains('CellTuner · Signal Session Report'));
       } finally {
         if (tempDir.existsSync()) {
           await tempDir.delete(recursive: true);

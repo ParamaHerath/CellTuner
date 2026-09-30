@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'recording_html_generator.dart';
+
 /// Formats a raw Cell ID according to LTE (eNB-Sector) or 5G (gNB-Sector) split convention.
 String formatCellIdString(String raw, {required bool is5g}) {
   final trimmed = raw.trim();
@@ -265,6 +267,16 @@ class SignalRecordingSession {
   }
 }
 
+class RecordingSaveResult {
+  const RecordingSaveResult({
+    required this.jsonFile,
+    required this.htmlFile,
+  });
+
+  final File jsonFile;
+  final File htmlFile;
+}
+
 class RecordingStorage {
   static Directory getRecordingsDirectory() {
     try {
@@ -297,20 +309,28 @@ class RecordingStorage {
     return 'signal_recording_${year}-${month}-${day}_${hour}${minute}${second}.json';
   }
 
-  static File saveRecordingSync(
+  static RecordingSaveResult saveRecordingSync(
     SignalRecordingSession session, {
     Directory? directory,
   }) {
     final targetDir = directory ?? getRecordingsDirectory();
-    final filename = generateFilename(session.startTime);
-    final file = File('${targetDir.path}${Platform.pathSeparator}$filename');
+    final jsonFilename = generateFilename(session.startTime);
+    final htmlFilename = jsonFilename.replaceAll('.json', '.html');
+
+    final jsonFile = File('${targetDir.path}${Platform.pathSeparator}$jsonFilename');
+    final htmlFile = File('${targetDir.path}${Platform.pathSeparator}$htmlFilename');
+
     const encoder = JsonEncoder.withIndent('  ');
     final jsonStr = encoder.convert(session.toJson());
-    file.writeAsStringSync(jsonStr);
-    return file;
+    jsonFile.writeAsStringSync(jsonStr);
+
+    final htmlContent = generateRecordingHtml(session);
+    htmlFile.writeAsStringSync(htmlContent);
+
+    return RecordingSaveResult(jsonFile: jsonFile, htmlFile: htmlFile);
   }
 
-  static Future<File> saveRecording(
+  static Future<RecordingSaveResult> saveRecording(
     SignalRecordingSession session, {
     Directory? directory,
   }) async {
@@ -325,6 +345,18 @@ class RecordingStorage {
         await Process.run('open', ['-R', filePath]);
       } else if (Platform.isLinux) {
         await Process.run('xdg-open', [File(filePath).parent.path]);
+      }
+    } catch (_) {}
+  }
+
+  static Future<void> openInBrowser(String htmlPath) async {
+    try {
+      if (Platform.isWindows) {
+        await Process.run('cmd.exe', ['/c', 'start', '', htmlPath]);
+      } else if (Platform.isMacOS) {
+        await Process.run('open', [htmlPath]);
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [htmlPath]);
       }
     } catch (_) {}
   }

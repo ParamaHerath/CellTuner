@@ -224,6 +224,7 @@ void main() {
     // Completion popup appears
     expect(find.text('Recording Complete'), findsOneWidget);
     expect(find.text('Open File'), findsOneWidget);
+    expect(find.text('Open Report'), findsOneWidget);
 
     // Close completion dialog
     await tester.tap(find.text('Close'));

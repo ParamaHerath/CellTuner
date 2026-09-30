@@ -246,9 +246,9 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
     });
 
     try {
-      final file = RecordingStorage.saveRecordingSync(session);
+      final result = RecordingStorage.saveRecordingSync(session);
       if (mounted) {
-        _showRecordingCompletedDialog(session, file.path);
+        _showRecordingCompletedDialog(session, result);
       }
     } catch (e) {
       if (mounted) {
@@ -259,7 +259,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
     }
   }
 
-  void _showRecordingCompletedDialog(SignalRecordingSession session, String filePath) {
+  void _showRecordingCompletedDialog(SignalRecordingSession session, RecordingSaveResult result) {
     showDialog<void>(
       context: context,
       builder: (dialogCtx) {
@@ -304,7 +304,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Your signal recording session has ended and the data was successfully saved to disk.',
+                'Your signal recording session has ended. Interactive HTML report and JSON data were successfully saved.',
                 style: TextStyle(
                   fontSize: 13,
                   color: colors.onSurfaceVariant,
@@ -331,7 +331,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
               ),
               const SizedBox(height: 14),
               Text(
-                'File Location',
+                'Interactive HTML Report',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -347,7 +347,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: SelectableText(
-                  filePath,
+                  result.htmlFile.path,
                   style: const TextStyle(
                     fontSize: 11,
                     fontFamily: 'monospace',
@@ -361,12 +361,19 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
               onPressed: () => Navigator.of(dialogCtx).pop(),
               child: const Text('Close'),
             ),
-            FilledButton.icon(
+            OutlinedButton.icon(
               onPressed: () {
-                RecordingStorage.openFile(filePath);
+                RecordingStorage.openFile(result.htmlFile.path);
               },
               icon: const Icon(LucideIcons.folderOpen, size: 15),
               label: const Text('Open File'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                RecordingStorage.openInBrowser(result.htmlFile.path);
+              },
+              icon: const Icon(LucideIcons.externalLink, size: 15),
+              label: const Text('Open Report'),
             ),
           ],
         );
