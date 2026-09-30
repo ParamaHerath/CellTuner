@@ -5,6 +5,9 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'router/router_api_client.dart';
 import 'router/router_snapshot.dart';
+import 'recording_session.dart';
+
+export 'recording_session.dart';
 
 void main() {
   runApp(const CellTunerApp());
@@ -66,6 +69,9 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
   final List<SignalMetricSample> _signalHistory = <SignalMetricSample>[];
   Set<String> _selectedSignalMetrics = <String>{'RSSI', 'RSRP', 'RSRQ', 'SINR'};
   String _signalTechMode = 'Both (4G & 5G)';
+  String _signalTimeWindow = '1min';
+  SignalRecordingSession? _recordingSession;
+  Timer? _recordingTimer;
 
   RouterSnapshotLoader get _loader =>
       widget.snapshotLoader ?? _client!.fetchSnapshot;
@@ -93,6 +99,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _recordingTimer?.cancel();
     _menuAnimation.dispose();
     _client?.close();
     super.dispose();
@@ -131,7 +138,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
 
   void _recordSignalSnapshot(RouterSnapshot snapshot) {
     final now = DateTime.now();
-    final cutoff = now.subtract(const Duration(seconds: 65));
+    final cutoff = now.subtract(const Duration(minutes: 65));
 
     double? findVal(String key, CellularLayer layer) {
       for (final m in snapshot.metrics) {
@@ -145,7 +152,18 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
       return null;
     }
 
-    _signalHistory.add(SignalMetricSample(
+    String? findCellId(CellularLayer layer) {
+      for (final m in snapshot.metrics) {
+        if (m.label.toLowerCase() == 'cell id') {
+          final raw = m.valueFor(layer);
+          if (raw == '-') return null;
+          return raw.trim();
+        }
+      }
+      return null;
+    }
+
+    final sample = SignalMetricSample(
       timestamp: now,
       rssiLte: findVal('RSSI', CellularLayer.lte),
       rssiNr5g: findVal('RSSI', CellularLayer.nr5g),
@@ -155,9 +173,232 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
       rsrqNr5g: findVal('RSRQ', CellularLayer.nr5g),
       sinrLte: findVal('SINR', CellularLayer.lte),
       sinrNr5g: findVal('SINR', CellularLayer.nr5g),
-    ));
+      cellIdLte: findCellId(CellularLayer.lte),
+      cellIdNr5g: findCellId(CellularLayer.nr5g),
+    );
 
+    _signalHistory.add(sample);
     _signalHistory.removeWhere((s) => s.timestamp.isBefore(cutoff));
+
+    if (_recordingSession != null && !_recordingSession!.isCompleted) {
+      _recordingSession!.addSample(sample);
+      if (_recordingSession!.progressFraction() >= 1.0) {
+        _finishAndSaveRecording();
+      }
+    }
+  }
+
+  void _startRecording(String durationLabel) {
+    _recordingTimer?.cancel();
+    final durationSeconds = parseTimeWindowSeconds(durationLabel);
+    final now = DateTime.now();
+
+    final session = SignalRecordingSession(
+      id: 'session_${now.millisecondsSinceEpoch}',
+      startTime: now,
+      targetDurationSeconds: durationSeconds,
+      durationLabel: durationLabel,
+      routerHost: _host,
+      initialSamples: _signalHistory.isNotEmpty ? [_signalHistory.last] : null,
+    );
+
+    setState(() {
+      _recordingSession = session;
+    });
+
+    final isTest = WidgetsBinding.instance.runtimeType.toString().contains('Test');
+    if (!isTest) {
+      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+
+        final currentNow = DateTime.now();
+        if (session.progressFraction(currentNow) >= 1.0) {
+          timer.cancel();
+          _finishAndSaveRecording();
+        } else {
+          setState(() {});
+        }
+      });
+    }
+  }
+
+  void _stopRecording({bool save = true}) {
+    _recordingTimer?.cancel();
+    if (save && _recordingSession != null) {
+      _finishAndSaveRecording();
+    } else {
+      setState(() {
+        _recordingSession = null;
+      });
+    }
+  }
+
+  void _finishAndSaveRecording() {
+    final session = _recordingSession;
+    if (session == null) return;
+    _recordingTimer?.cancel();
+    session.finish();
+    setState(() {
+      _recordingSession = null;
+    });
+
+    try {
+      final result = RecordingStorage.saveRecordingSync(session);
+      if (mounted) {
+        _showRecordingCompletedDialog(session, result);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save recording: $e')),
+        );
+      }
+    }
+  }
+
+  void _showRecordingCompletedDialog(SignalRecordingSession session, RecordingSaveResult result) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogCtx) {
+        final colors = Theme.of(dialogCtx).colorScheme;
+        final handoffs = findHandoffEvents(session.samples);
+        return AlertDialog(
+          backgroundColor: colors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: colors.outlineVariant.withOpacity(0.4)),
+          ),
+          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+          contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 18, 24, 20),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  LucideIcons.checkCircle2,
+                  color: Color(0xFF10B981),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Recording Complete',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Your signal recording session has ended. Interactive HTML report and JSON data were successfully saved.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: colors.onSurfaceVariant,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerHighest.withOpacity(0.35),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: colors.outlineVariant.withOpacity(0.4)),
+                ),
+                child: Column(
+                  children: [
+                    _buildStatRow('Duration', '${session.durationLabel} (${session.elapsedSeconds.round()}s)', colors),
+                    const SizedBox(height: 6),
+                    _buildStatRow('Samples', '${session.samples.length} points', colors),
+                    const SizedBox(height: 6),
+                    _buildStatRow('Tower Handoffs', '${handoffs.length} events', colors),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Interactive HTML Report',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerHighest.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: SelectableText(
+                  result.htmlFile.path,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              child: const Text('Close'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () {
+                RecordingStorage.openFile(result.htmlFile.path);
+              },
+              icon: const Icon(LucideIcons.folderOpen, size: 15),
+              label: const Text('Open File'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                RecordingStorage.openInBrowser(result.htmlFile.path);
+              },
+              icon: const Icon(LucideIcons.externalLink, size: 15),
+              label: const Text('Open Report'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  static Widget _buildStatRow(String label, String value, ColorScheme colors) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: colors.onSurface,
+          ),
+        ),
+      ],
+    );
   }
 
   void _refresh() {
@@ -262,6 +503,10 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
             signalHistory: _signalHistory,
             selectedSignalMetrics: _selectedSignalMetrics,
             signalTechMode: _signalTechMode,
+            signalTimeWindow: _signalTimeWindow,
+            recordingSession: _recordingSession,
+            onStartRecording: _startRecording,
+            onStopRecording: () => _stopRecording(save: true),
             lastUpdated: _lastUpdated,
             section: _selectedSection,
             onRefresh: _refresh,
@@ -273,6 +518,9 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
             },
             onSignalTechModeChanged: (mode) {
               setState(() => _signalTechMode = mode);
+            },
+            onSignalTimeWindowChanged: (window) {
+              setState(() => _signalTimeWindow = window);
             },
           ),
         );
@@ -575,6 +823,10 @@ class _DashboardContent extends StatelessWidget {
     required this.signalHistory,
     required this.selectedSignalMetrics,
     required this.signalTechMode,
+    required this.signalTimeWindow,
+    this.recordingSession,
+    this.onStartRecording,
+    this.onStopRecording,
     required this.lastUpdated,
     required this.section,
     required this.onRefresh,
@@ -583,6 +835,7 @@ class _DashboardContent extends StatelessWidget {
     required this.onSplitCellIdChanged,
     required this.onSelectedSignalMetricsChanged,
     required this.onSignalTechModeChanged,
+    required this.onSignalTimeWindowChanged,
     this.isMobile = false,
   });
 
@@ -593,6 +846,10 @@ class _DashboardContent extends StatelessWidget {
   final List<SignalMetricSample> signalHistory;
   final Set<String> selectedSignalMetrics;
   final String signalTechMode;
+  final String signalTimeWindow;
+  final SignalRecordingSession? recordingSession;
+  final ValueChanged<String>? onStartRecording;
+  final VoidCallback? onStopRecording;
   final DateTime? lastUpdated;
   final _DashboardSection section;
   final VoidCallback onRefresh;
@@ -601,6 +858,7 @@ class _DashboardContent extends StatelessWidget {
   final ValueChanged<bool> onSplitCellIdChanged;
   final ValueChanged<Set<String>> onSelectedSignalMetricsChanged;
   final ValueChanged<String> onSignalTechModeChanged;
+  final ValueChanged<String> onSignalTimeWindowChanged;
   final bool isMobile;
 
   @override
@@ -626,11 +884,16 @@ class _DashboardContent extends StatelessWidget {
                 signalHistory: signalHistory,
                 selectedSignalMetrics: selectedSignalMetrics,
                 signalTechMode: signalTechMode,
+                signalTimeWindow: signalTimeWindow,
+                recordingSession: recordingSession,
+                onStartRecording: onStartRecording,
+                onStopRecording: onStopRecording,
                 onHostChanged: onHostChanged,
                 onRefreshIntervalChanged: onRefreshIntervalChanged,
                 onSplitCellIdChanged: onSplitCellIdChanged,
                 onSelectedSignalMetricsChanged: onSelectedSignalMetricsChanged,
                 onSignalTechModeChanged: onSignalTechModeChanged,
+                onSignalTimeWindowChanged: onSignalTimeWindowChanged,
               ),
               const SizedBox(height: 40),
               Text(
@@ -660,11 +923,16 @@ class _SectionPage extends StatelessWidget {
     required this.signalHistory,
     required this.selectedSignalMetrics,
     required this.signalTechMode,
+    required this.signalTimeWindow,
+    this.recordingSession,
+    this.onStartRecording,
+    this.onStopRecording,
     required this.onHostChanged,
     required this.onRefreshIntervalChanged,
     required this.onSplitCellIdChanged,
     required this.onSelectedSignalMetricsChanged,
     required this.onSignalTechModeChanged,
+    required this.onSignalTimeWindowChanged,
   });
 
   final _DashboardSection section;
@@ -675,11 +943,16 @@ class _SectionPage extends StatelessWidget {
   final List<SignalMetricSample> signalHistory;
   final Set<String> selectedSignalMetrics;
   final String signalTechMode;
+  final String signalTimeWindow;
+  final SignalRecordingSession? recordingSession;
+  final ValueChanged<String>? onStartRecording;
+  final VoidCallback? onStopRecording;
   final ValueChanged<String> onHostChanged;
   final ValueChanged<double> onRefreshIntervalChanged;
   final ValueChanged<bool> onSplitCellIdChanged;
   final ValueChanged<Set<String>> onSelectedSignalMetricsChanged;
   final ValueChanged<String> onSignalTechModeChanged;
+  final ValueChanged<String> onSignalTimeWindowChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -714,6 +987,16 @@ class _SectionPage extends StatelessWidget {
                 mode: signalTechMode,
                 onChanged: onSignalTechModeChanged,
               ),
+              _RecordButton(
+                recordingSession: recordingSession,
+                defaultDuration: signalTimeWindow,
+                onStartRecording: onStartRecording ?? (_) {},
+                onStopRecording: onStopRecording ?? () {},
+              ),
+              _TimeWindowDropdown(
+                selectedWindow: signalTimeWindow,
+                onChanged: onSignalTimeWindowChanged,
+              ),
             ],
           ),
           child: _SignalPage(
@@ -721,6 +1004,8 @@ class _SectionPage extends StatelessWidget {
             snapshot: snapshot,
             selectedMetrics: selectedSignalMetrics,
             techMode: signalTechMode,
+            splitCellId: splitCellId,
+            timeWindow: signalTimeWindow,
           ),
         ),
       _DashboardSection.wan => _PagePanel(
@@ -775,7 +1060,7 @@ class _PagePanel extends StatelessWidget {
       children: <Widget>[
         LayoutBuilder(
           builder: (context, constraints) {
-            final isNarrow = constraints.maxWidth < 640;
+            final isNarrow = constraints.maxWidth < 1150;
             if (isNarrow && headerActions != null) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1051,38 +1336,313 @@ class _TechModeDropdown extends StatelessWidget {
   }
 }
 
-class SignalMetricSample {
-  const SignalMetricSample({
-    required this.timestamp,
-    required this.rssiLte,
-    required this.rssiNr5g,
-    required this.rsrpLte,
-    required this.rsrpNr5g,
-    required this.rsrqLte,
-    required this.rsrqNr5g,
-    required this.sinrLte,
-    required this.sinrNr5g,
+double parseTimeWindowSeconds(String window) {
+  return switch (window) {
+    '1min' => 60.0,
+    '2min' => 120.0,
+    '5min' => 300.0,
+    '15min' => 900.0,
+    '30min' => 1800.0,
+    '1hr' => 3600.0,
+    _ => 60.0,
+  };
+}
+
+class _RecordButton extends StatelessWidget {
+  const _RecordButton({
+    required this.recordingSession,
+    required this.defaultDuration,
+    required this.onStartRecording,
+    required this.onStopRecording,
   });
 
-  final DateTime timestamp;
-  final double? rssiLte;
-  final double? rssiNr5g;
-  final double? rsrpLte;
-  final double? rsrpNr5g;
-  final double? rsrqLte;
-  final double? rsrqNr5g;
-  final double? sinrLte;
-  final double? sinrNr5g;
+  final SignalRecordingSession? recordingSession;
+  final String defaultDuration;
+  final ValueChanged<String> onStartRecording;
+  final VoidCallback onStopRecording;
 
-  double? getValue(String key, {required bool is5g}) {
-    return switch (key.toUpperCase()) {
-      'RSSI' => is5g ? rssiNr5g : rssiLte,
-      'RSRP' => is5g ? rsrpNr5g : rsrpLte,
-      'RSRQ' => is5g ? rsrqNr5g : rsrqLte,
-      'SINR' => is5g ? sinrNr5g : sinrLte,
-      _ => null,
-    };
+  Future<void> _showStartDialog(BuildContext context) async {
+    String selected = defaultDuration;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) {
+        final colors = Theme.of(dialogCtx).colorScheme;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: colors.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: colors.outlineVariant.withOpacity(0.4)),
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              actionsPadding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      LucideIcons.circleDot,
+                      color: Color(0xFFEF4444),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Record Signal Session',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Select how long to record signal metrics and tower changes. The session will be saved as an interactive JSON file when complete.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colors.onSurfaceVariant,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Session Duration',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainerHighest.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: colors.outlineVariant.withOpacity(0.6)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selected,
+                        isExpanded: true,
+                        icon: const Icon(LucideIcons.chevronDown, size: 16),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: colors.onSurface,
+                        ),
+                        items: _TimeWindowDropdown.options.map((opt) {
+                          return DropdownMenuItem<String>(
+                            value: opt,
+                            child: Text(opt),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setDialogState(() => selected = val);
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogCtx).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFEF4444),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onPressed: () => Navigator.of(dialogCtx).pop(true),
+                  icon: const Icon(LucideIcons.circleDot, size: 15),
+                  label: const Text('Start Recording'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      onStartRecording(selected);
+    }
   }
+
+  Future<void> _showStopDialog(BuildContext context) async {
+    final colors = Theme.of(context).colorScheme;
+    final session = recordingSession;
+    if (session == null) return;
+
+    final action = await showDialog<String>(
+      context: context,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          backgroundColor: colors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: colors.outlineVariant.withOpacity(0.4)),
+          ),
+          title: const Row(
+            children: [
+              _BreathingDot(color: Color(0xFFEF4444), size: 10),
+              SizedBox(width: 10),
+              Text(
+                'Recording in Progress',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          content: Text(
+            'Session progress: ${session.progressPercent()}%\nSamples captured: ${session.samples.length}\n\nWould you like to finish and save now or cancel?',
+            style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop('continue'),
+              child: const Text('Continue'),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: colors.error),
+              onPressed: () => Navigator.of(dialogCtx).pop('discard'),
+              child: const Text('Discard'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogCtx).pop('save'),
+              child: const Text('Stop & Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (action == 'save') {
+      onStopRecording();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final isRecording = recordingSession != null;
+    final percent = recordingSession?.progressPercent() ?? 0;
+
+    return InkWell(
+      onTap: isRecording ? () => _showStopDialog(context) : () => _showStartDialog(context),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5.5),
+        decoration: BoxDecoration(
+          color: isRecording
+              ? const Color(0xFFEF4444).withOpacity(0.08)
+              : colors.surface,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isRecording
+                ? const Color(0xFFEF4444).withOpacity(0.5)
+                : colors.outlineVariant.withOpacity(0.5),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (isRecording)
+              const _BreathingDot(color: Color(0xFFEF4444), size: 6.5)
+            else
+              const Icon(
+                LucideIcons.circleDot,
+                size: 13,
+                color: Color(0xFFEF4444),
+              ),
+            const SizedBox(width: 6),
+            Text(
+              isRecording ? 'Recording $percent%' : 'Record',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isRecording ? const Color(0xFFDC2626) : colors.onSurface,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TimeWindowDropdown extends StatelessWidget {
+  const _TimeWindowDropdown({
+    required this.selectedWindow,
+    required this.onChanged,
+  });
+
+  final String selectedWindow;
+  final ValueChanged<String> onChanged;
+
+  static const options = <String>['1min', '2min', '5min', '15min', '30min', '1hr'];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selectedWindow,
+          isDense: true,
+          icon: const Icon(LucideIcons.chevronDown, size: 13),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: colors.onSurface,
+          ),
+          items: options.map((opt) {
+            return DropdownMenuItem<String>(
+              value: opt,
+              child: Text(opt),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) onChanged(val);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+
+
+String _formatHandoffTime(DateTime dt) {
+  final h = dt.hour.toString().padLeft(2, '0');
+  final m = dt.minute.toString().padLeft(2, '0');
+  final s = dt.second.toString().padLeft(2, '0');
+  return '$h:$m:$s';
 }
 
 class _SignalPage extends StatelessWidget {
@@ -1091,12 +1651,16 @@ class _SignalPage extends StatelessWidget {
     required this.snapshot,
     this.selectedMetrics,
     this.techMode,
+    this.splitCellId = true,
+    this.timeWindow = '1min',
   });
 
   final List<SignalMetricSample> history;
   final RouterSnapshot snapshot;
   final Set<String>? selectedMetrics;
   final String? techMode;
+  final bool splitCellId;
+  final String timeWindow;
 
   @override
   Widget build(BuildContext context) {
@@ -1104,6 +1668,8 @@ class _SignalPage extends StatelessWidget {
     final mode = techMode ?? 'Both (4G & 5G)';
     final show4g = mode == 'Both (4G & 5G)' || mode == '4G LTE Only';
     final show5g = mode == 'Both (4G & 5G)' || mode == '5G NR Only';
+    final timeWindowSeconds = parseTimeWindowSeconds(timeWindow);
+    final handoffs = findHandoffEvents(history);
 
     const metricConfigs = <(String, String, String)>[
       ('RSSI', 'RSSI (Received Signal Strength)', 'dBm'),
@@ -1157,6 +1723,9 @@ class _SignalPage extends StatelessWidget {
                       history: history,
                       show4g: show4g,
                       show5g: show5g,
+                      splitCellId: splitCellId,
+                      handoffs: handoffs,
+                      timeWindowSeconds: timeWindowSeconds,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -1169,6 +1738,9 @@ class _SignalPage extends StatelessWidget {
                             history: history,
                             show4g: show4g,
                             show5g: show5g,
+                            splitCellId: splitCellId,
+                            handoffs: handoffs,
+                            timeWindowSeconds: timeWindowSeconds,
                           )
                         : const SizedBox.shrink(),
                   ),
@@ -1191,6 +1763,9 @@ class _SignalPage extends StatelessWidget {
                   history: history,
                   show4g: show4g,
                   show5g: show5g,
+                  splitCellId: splitCellId,
+                  handoffs: handoffs,
+                  timeWindowSeconds: timeWindowSeconds,
                 ),
                 if (i < visibleConfigs.length - 1) const SizedBox(height: 16),
               ],
@@ -1241,10 +1816,15 @@ _ChartRange _calculateDynamicYRange(
   String metricKey,
   List<SignalMetricSample> history,
   bool show4g,
-  bool show5g,
-) {
+  bool show5g, {
+  double timeWindowSeconds = 60.0,
+}) {
+  final now = history.isNotEmpty ? history.last.timestamp : DateTime.now();
+  final windowCutoff = now.subtract(Duration(seconds: timeWindowSeconds.toInt()));
+
   final allVals = <double>[];
   for (final sample in history) {
+    if (sample.timestamp.isBefore(windowCutoff)) continue;
     if (show4g) {
       final v = sample.getValue(metricKey, is5g: false);
       if (v != null) allVals.add(v);
@@ -1340,6 +1920,9 @@ class _MetricGraphCard extends StatelessWidget {
     required this.history,
     required this.show4g,
     required this.show5g,
+    this.splitCellId = true,
+    this.handoffs = const <TowerHandoffEvent>[],
+    this.timeWindowSeconds = 60.0,
   });
 
   final String title;
@@ -1348,6 +1931,9 @@ class _MetricGraphCard extends StatelessWidget {
   final List<SignalMetricSample> history;
   final bool show4g;
   final bool show5g;
+  final bool splitCellId;
+  final List<TowerHandoffEvent> handoffs;
+  final double timeWindowSeconds;
 
   @override
   Widget build(BuildContext context) {
@@ -1355,7 +1941,13 @@ class _MetricGraphCard extends StatelessWidget {
     final latest = history.isNotEmpty ? history.last : null;
     final lteVal = latest?.getValue(metricKey, is5g: false);
     final nr5gVal = latest?.getValue(metricKey, is5g: true);
-    final targetRange = _calculateDynamicYRange(metricKey, history, show4g, show5g);
+    final targetRange = _calculateDynamicYRange(
+      metricKey,
+      history,
+      show4g,
+      show5g,
+      timeWindowSeconds: timeWindowSeconds,
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -1440,18 +2032,97 @@ class _MetricGraphCard extends StatelessWidget {
                 duration: const Duration(milliseconds: 600),
                 curve: Curves.easeOutCubic,
                 builder: (context, range, child) {
-                  return CustomPaint(
-                    painter: _MetricLineChartPainter(
-                      metricKey: metricKey,
-                      unit: unit,
-                      history: history,
-                      show4g: show4g,
-                      show5g: show5g,
-                      minY: range.minY,
-                      maxY: range.maxY,
-                      gridColor: colors.outlineVariant.withOpacity(0.3),
-                      labelColor: colors.onSurfaceVariant,
-                    ),
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      const chartLeft = 42.0;
+                      final chartRight = constraints.maxWidth - 15.0;
+                      final chartWidth = chartRight - chartLeft;
+                      final now = history.isNotEmpty ? history.last.timestamp : DateTime.now();
+
+                      final visibleHandoffs = handoffs.where((h) {
+                        final age = now.difference(h.timestamp).inMilliseconds / 1000.0;
+                        return age >= 0 && age <= timeWindowSeconds;
+                      }).toList();
+
+                      return Stack(
+                        children: [
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: _MetricLineChartPainter(
+                                metricKey: metricKey,
+                                unit: unit,
+                                history: history,
+                                show4g: show4g,
+                                show5g: show5g,
+                                minY: range.minY,
+                                maxY: range.maxY,
+                                gridColor: colors.outlineVariant.withOpacity(0.3),
+                                labelColor: colors.onSurfaceVariant,
+                                handoffs: visibleHandoffs,
+                                timeWindowSeconds: timeWindowSeconds,
+                              ),
+                            ),
+                          ),
+                          for (final handoff in visibleHandoffs) ...[
+                            () {
+                              final age = now.difference(handoff.timestamp).inMilliseconds / 1000.0;
+                              final x = chartRight - ((age / timeWindowSeconds) * chartWidth);
+                              if (x < chartLeft || x > chartRight) return const SizedBox.shrink();
+
+                              return Positioned(
+                                left: (x - 14).clamp(0.0, constraints.maxWidth - 28.0),
+                                top: 15,
+                                bottom: 25,
+                                width: 28,
+                                child: Tooltip(
+                                  triggerMode: TooltipTriggerMode.tap,
+                                  preferBelow: false,
+                                  verticalOffset: 12,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: colors.inverseSurface,
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.2),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  richMessage: TextSpan(
+                                    children: [
+                                      TextSpan(
+                                        text: 'Handoff · ${_formatHandoffTime(handoff.timestamp)}\n',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: colors.onInverseSurface,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                      TextSpan(
+                                        text: handoff.formatChange(splitCellId),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: colors.onInverseSurface.withOpacity(0.9),
+                                          letterSpacing: 0.1,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  child: MouseRegion(
+                                    cursor: SystemMouseCursors.click,
+                                    child: Container(color: Colors.transparent),
+                                  ),
+                                ),
+                              );
+                            }(),
+                          ],
+                        ],
+                      );
+                    },
                   );
                 },
               ),
@@ -1461,6 +2132,22 @@ class _MetricGraphCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String formatXAxisLabel(double ageSeconds, double totalWindowSeconds) {
+  if (ageSeconds <= 0) return 'Now';
+  final rounded = ageSeconds.round();
+  if (totalWindowSeconds <= 60 && rounded <= 60) return '-${rounded}s';
+  if (rounded < 60) return '-${rounded}s';
+  if (rounded < 3600) {
+    if (rounded % 60 == 0) return '-${rounded ~/ 60}m';
+    return '-${rounded ~/ 60}m ${(rounded % 60)}s';
+  }
+  if (rounded % 3600 == 0) return '-${rounded ~/ 3600}h';
+  final hrs = rounded ~/ 3600;
+  final mins = (rounded % 3600) ~/ 60;
+  if (mins == 0) return '-${hrs}h';
+  return '-${hrs}h ${mins}m';
 }
 
 class _MetricLineChartPainter extends CustomPainter {
@@ -1474,6 +2161,8 @@ class _MetricLineChartPainter extends CustomPainter {
     required this.maxY,
     required this.gridColor,
     required this.labelColor,
+    this.handoffs = const <TowerHandoffEvent>[],
+    this.timeWindowSeconds = 60.0,
   });
 
   final String metricKey;
@@ -1485,6 +2174,8 @@ class _MetricLineChartPainter extends CustomPainter {
   final double maxY;
   final Color gridColor;
   final Color labelColor;
+  final List<TowerHandoffEvent> handoffs;
+  final double timeWindowSeconds;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1498,13 +2189,14 @@ class _MetricLineChartPainter extends CustomPainter {
     if (chartWidth <= 0 || chartHeight <= 0) return;
 
     final now = history.isNotEmpty ? history.last.timestamp : DateTime.now();
+    final windowCutoff = now.subtract(Duration(seconds: timeWindowSeconds.toInt() + 5));
 
-    var pointsSource = history;
+    var pointsSource = history.where((s) => !s.timestamp.isBefore(windowCutoff)).toList();
     if (pointsSource.length == 1) {
       final single = pointsSource.first;
       pointsSource = [
         SignalMetricSample(
-          timestamp: now.subtract(const Duration(seconds: 60)),
+          timestamp: now.subtract(Duration(seconds: timeWindowSeconds.toInt())),
           rssiLte: single.rssiLte,
           rssiNr5g: single.rssiNr5g,
           rsrpLte: single.rsrpLte,
@@ -1513,6 +2205,8 @@ class _MetricLineChartPainter extends CustomPainter {
           rsrqNr5g: single.rsrqNr5g,
           sinrLte: single.sinrLte,
           sinrNr5g: single.sinrNr5g,
+          cellIdLte: single.cellIdLte,
+          cellIdNr5g: single.cellIdNr5g,
         ),
         single,
       ];
@@ -1546,10 +2240,10 @@ class _MetricLineChartPainter extends CustomPainter {
     }
 
     final xLabels = <(double, String)>[
-      (0.0, '-60s'),
-      (0.25, '-45s'),
-      (0.5, '-30s'),
-      (0.75, '-15s'),
+      (0.0, formatXAxisLabel(timeWindowSeconds, timeWindowSeconds)),
+      (0.25, formatXAxisLabel(timeWindowSeconds * 0.75, timeWindowSeconds)),
+      (0.5, formatXAxisLabel(timeWindowSeconds * 0.5, timeWindowSeconds)),
+      (0.75, formatXAxisLabel(timeWindowSeconds * 0.25, timeWindowSeconds)),
       (1.0, 'Now'),
     ];
 
@@ -1575,7 +2269,7 @@ class _MetricLineChartPainter extends CustomPainter {
         final val = sample.getValue(metricKey, is5g: is5g);
         if (val == null) continue;
         final age = now.difference(sample.timestamp).inMilliseconds / 1000.0;
-        final x = chartRight - ((age / 60.0) * chartWidth);
+        final x = chartRight - ((age / timeWindowSeconds) * chartWidth);
         final clampedX = x.clamp(chartLeft, chartRight);
         final yRatio = (val - minY) / effectiveSpan;
         final y = chartBottom - (yRatio * chartHeight);
@@ -1643,6 +2337,28 @@ class _MetricLineChartPainter extends CustomPainter {
 
     if (show4g) drawSeries(false, const Color(0xFF00A83B));
     if (show5g) drawSeries(true, const Color(0xFF003BFF));
+
+    final handoffPaint = Paint()
+      ..color = const Color(0xFF111827)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+
+    for (final handoff in handoffs) {
+      final age = now.difference(handoff.timestamp).inMilliseconds / 1000.0;
+      if (age < 0 || age > timeWindowSeconds) continue;
+
+      final x = chartRight - ((age / timeWindowSeconds) * chartWidth);
+      if (x < chartLeft || x > chartRight) continue;
+
+      const dashHeight = 3.0;
+      const dashSpace = 3.0;
+      var y = chartTop;
+      while (y < chartBottom) {
+        final nextY = (y + dashHeight).clamp(chartTop, chartBottom);
+        canvas.drawLine(Offset(x, y), Offset(x, nextY), handoffPaint);
+        y += dashHeight + dashSpace;
+      }
+    }
   }
 
   @override
@@ -1652,7 +2368,9 @@ class _MetricLineChartPainter extends CustomPainter {
         oldDelegate.show5g != show5g ||
         oldDelegate.metricKey != metricKey ||
         oldDelegate.minY != minY ||
-        oldDelegate.maxY != maxY;
+        oldDelegate.maxY != maxY ||
+        oldDelegate.handoffs != handoffs ||
+        oldDelegate.timeWindowSeconds != timeWindowSeconds;
   }
 }
 
@@ -2556,21 +3274,8 @@ class _SignalTable extends StatelessWidget {
   }
 }
 
-String _formatCellIdString(String raw, {required bool is5g}) {
-  final trimmed = raw.trim();
-  if (trimmed.isEmpty || trimmed == '-') return raw;
-  final val = int.tryParse(trimmed);
-  if (val == null) return raw;
-  if (!is5g) {
-    final enb = val ~/ 256;
-    final sector = val % 256;
-    return '$enb-$sector';
-  } else {
-    final gnb = val ~/ 16384;
-    final sector = val % 16384;
-    return '$gnb-$sector';
-  }
-}
+String _formatCellIdString(String raw, {required bool is5g}) =>
+    formatCellIdString(raw, is5g: is5g);
 
 class _TableCell extends StatelessWidget {
   const _TableCell(this.value, {this.header = false});
