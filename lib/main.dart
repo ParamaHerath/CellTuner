@@ -1283,49 +1283,72 @@ class _MetricsDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return PopupMenuButton<String>(
-      tooltip: 'Select metrics',
-      onSelected: (metricKey) {
-        final updated = Set<String>.from(selectedMetrics);
-        if (updated.contains(metricKey)) {
-          updated.remove(metricKey);
-        } else {
-          updated.add(metricKey);
-        }
-        onChanged(updated);
-      },
-      itemBuilder: (context) => <PopupMenuEntry<String>>[
-        for (final m in <String>['RSSI', 'RSRP', 'RSRQ', 'SINR'])
-          CheckedPopupMenuItem<String>(
-            value: m,
-            checked: selectedMetrics.contains(m),
-            child: Text(m, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-          ),
-      ],
-      child: Container(
-        height: 32,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: colors.surface,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
+    return Theme(
+      data: Theme.of(context).copyWith(
+        hoverColor: colors.primary.withOpacity(0.08),
+      ),
+      child: PopupMenuButton<String>(
+        tooltip: 'Select metrics',
+        position: PopupMenuPosition.under,
+        offset: const Offset(0, 4),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: colors.outlineVariant.withOpacity(0.5)),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(LucideIcons.sliders, size: 14, color: colors.primary),
-            const SizedBox(width: 8),
-            Text(
-              _formatLabel(),
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: colors.onSurface,
+        color: colors.surface,
+        elevation: 4,
+        shadowColor: Colors.black.withOpacity(0.15),
+        onSelected: (metricKey) {
+          final updated = Set<String>.from(selectedMetrics);
+          if (updated.contains(metricKey)) {
+            updated.remove(metricKey);
+          } else {
+            updated.add(metricKey);
+          }
+          onChanged(updated);
+        },
+        itemBuilder: (context) => <PopupMenuEntry<String>>[
+          for (final m in <String>['RSSI', 'RSRP', 'RSRQ', 'SINR'])
+            CheckedPopupMenuItem<String>(
+              value: m,
+              checked: selectedMetrics.contains(m),
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                m,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: selectedMetrics.contains(m) ? FontWeight.w700 : FontWeight.w500,
+                  color: selectedMetrics.contains(m) ? colors.primary : colors.onSurface,
+                ),
               ),
             ),
-            const SizedBox(width: 6),
-            Icon(LucideIcons.chevronDown, size: 13, color: colors.onSurfaceVariant),
-          ],
+        ],
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(LucideIcons.sliders, size: 14, color: colors.primary),
+              const SizedBox(width: 8),
+              Text(
+                _formatLabel(),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: colors.onSurface,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(LucideIcons.chevronDown, size: 13, color: colors.onSurfaceVariant),
+            ],
+          ),
         ),
       ),
     );
@@ -1341,52 +1364,88 @@ class _TechModeDropdown extends StatelessWidget {
   final String mode;
   final ValueChanged<String> onChanged;
 
+  static const options = <String>[
+    'Both (4G & 5G)',
+    '4G LTE Only',
+    '5G NR Only',
+  ];
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
+    return Theme(
+      data: Theme.of(context).copyWith(
+        hoverColor: colors.primary.withOpacity(0.08),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(LucideIcons.radio, size: 14, color: colors.primary),
-          const SizedBox(width: 8),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: mode,
-              isDense: true,
-              icon: const Icon(LucideIcons.chevronDown, size: 13),
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: colors.onSurface,
-              ),
-              items: const [
-                DropdownMenuItem(
-                  value: 'Both (4G & 5G)',
-                  child: Text('Both (4G & 5G)'),
-                ),
-                DropdownMenuItem(
-                  value: '4G LTE Only',
-                  child: Text('4G LTE Only'),
-                ),
-                DropdownMenuItem(
-                  value: '5G NR Only',
-                  child: Text('5G NR Only'),
-                ),
-              ],
-              onChanged: (val) {
-                if (val != null) onChanged(val);
-              },
-            ),
+      child: PopupMenuButton<String>(
+        tooltip: 'Select network technology',
+        position: PopupMenuPosition.under,
+        offset: const Offset(0, 4),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+            color: colors.outlineVariant.withOpacity(0.5),
           ),
-        ],
+        ),
+        color: colors.surface,
+        elevation: 4,
+        shadowColor: Colors.black.withOpacity(0.15),
+        onSelected: onChanged,
+        itemBuilder: (context) => options.map((opt) {
+          final isSelected = opt == mode;
+          return PopupMenuItem<String>(
+            value: opt,
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  opt,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected ? colors.primary : colors.onSurface,
+                  ),
+                ),
+                if (isSelected) ...[
+                  const SizedBox(width: 12),
+                  Icon(
+                    LucideIcons.check,
+                    size: 14,
+                    color: colors.primary,
+                  ),
+                ],
+              ],
+            ),
+          );
+        }).toList(),
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(LucideIcons.radio, size: 14, color: colors.primary),
+              const SizedBox(width: 8),
+              Text(
+                mode,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: colors.onSurface,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(LucideIcons.chevronDown, size: 13, color: colors.onSurfaceVariant),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1843,41 +1902,77 @@ class _TimeWindowDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
+    return Theme(
+      data: Theme.of(context).copyWith(
+        hoverColor: colors.primary.withOpacity(0.08),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(LucideIcons.clock, size: 14, color: colors.primary),
-          const SizedBox(width: 8),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: selectedWindow,
-              isDense: true,
-              icon: const Icon(LucideIcons.chevronDown, size: 13),
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: colors.onSurface,
-              ),
-              items: options.map((opt) {
-                return DropdownMenuItem<String>(
-                  value: opt,
-                  child: Text(opt),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) onChanged(val);
-              },
-            ),
+      child: PopupMenuButton<String>(
+        tooltip: 'Select time window',
+        position: PopupMenuPosition.under,
+        offset: const Offset(0, 4),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+            color: colors.outlineVariant.withOpacity(0.5),
           ),
-        ],
+        ),
+        color: colors.surface,
+        elevation: 4,
+        shadowColor: Colors.black.withOpacity(0.15),
+        onSelected: onChanged,
+        itemBuilder: (context) => options.map((opt) {
+          final isSelected = opt == selectedWindow;
+          return PopupMenuItem<String>(
+            value: opt,
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  opt,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected ? colors.primary : colors.onSurface,
+                  ),
+                ),
+                if (isSelected)
+                  Icon(
+                    LucideIcons.check,
+                    size: 14,
+                    color: colors.primary,
+                  ),
+              ],
+            ),
+          );
+        }).toList(),
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: colors.outlineVariant.withOpacity(0.5)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(LucideIcons.clock, size: 14, color: colors.primary),
+              const SizedBox(width: 8),
+              Text(
+                selectedWindow,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: colors.onSurface,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(LucideIcons.chevronDown, size: 13, color: colors.onSurfaceVariant),
+            ],
+          ),
+        ),
       ),
     );
   }

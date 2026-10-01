@@ -167,6 +167,16 @@ void main() {
 
     expect(find.text('5min'), findsOneWidget);
 
+    // Test Tech Mode dropdown
+    expect(find.text('Both (4G & 5G)'), findsOneWidget);
+    await tester.tap(find.text('Both (4G & 5G)'));
+    await tester.pumpAndSettle();
+    expect(find.text('4G LTE Only'), findsOneWidget);
+    expect(find.text('5G NR Only'), findsOneWidget);
+    await tester.tap(find.text('4G LTE Only').last);
+    await tester.pumpAndSettle();
+    expect(find.text('4G LTE Only'), findsOneWidget);
+
     debugDefaultTargetPlatformOverride = null;
   });
 
