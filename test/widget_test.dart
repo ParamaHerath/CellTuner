@@ -256,8 +256,40 @@ void main() {
 
     // Verify reset graphs button exists and can be tapped
     expect(find.byTooltip('Reset and restart graphs'), findsOneWidget);
+    final resetSize = tester.getSize(find.byTooltip('Reset and restart graphs'));
+    expect(resetSize.width, 32.0);
+    expect(resetSize.height, 32.0);
     await tester.tap(find.byTooltip('Reset and restart graphs'));
     await tester.pumpAndSettle();
+
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('reset button remains a tiny square on mobile viewport',
+      (WidgetTester tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      CellTunerApp(snapshotLoader: () async => _sampleSnapshot()),
+    );
+    await tester.pumpAndSettle();
+
+    // Navigate to Signal
+    await tester.tap(find.byType(AnimatedIcon));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Signal'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Reset and restart graphs'), findsOneWidget);
+    final size = tester.getSize(find.byTooltip('Reset and restart graphs'));
+    expect(size.width, 32.0);
+    expect(size.height, 32.0);
 
     debugDefaultTargetPlatformOverride = null;
   });

@@ -1899,8 +1899,8 @@ class _ResetGraphsButton extends StatelessWidget {
         onTap: onReset,
         borderRadius: BorderRadius.circular(6),
         child: Container(
+          width: 32,
           height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 9),
           decoration: BoxDecoration(
             color: colors.surface,
             borderRadius: BorderRadius.circular(6),
@@ -1908,12 +1908,11 @@ class _ResetGraphsButton extends StatelessWidget {
               color: colors.outlineVariant.withOpacity(0.5),
             ),
           ),
-          child: Center(
-            child: Icon(
-              LucideIcons.rotateCw,
-              size: 14,
-              color: colors.onSurface,
-            ),
+          alignment: Alignment.center,
+          child: Icon(
+            LucideIcons.rotateCw,
+            size: 14,
+            color: colors.onSurface,
           ),
         ),
       ),
@@ -3065,48 +3064,52 @@ class _StatusBar extends StatelessWidget {
           ),
           SizedBox(width: isMobile ? 8 : 16),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      'Dialog AirFibre',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.2,
-                          ),
-                    ),
-                    const SizedBox(width: 8),
-                    _StatusChip(
-                      signalBars: signalBars,
-                      label: badgeStyle.$1,
-                      backgroundColor: badgeStyle.$2,
-                      foregroundColor: badgeStyle.$3,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: <Widget>[
-                    const _BreathingDot(),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Router Connected @ $host',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: colors.onSurfaceVariant.withOpacity(0.7),
-                        fontWeight: FontWeight.w500,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        'Dialog AirFibre',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.2,
+                            ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 8),
+                      _StatusChip(
+                        signalBars: signalBars,
+                        label: badgeStyle.$1,
+                        backgroundColor: badgeStyle.$2,
+                        foregroundColor: badgeStyle.$3,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: <Widget>[
+                      const _BreathingDot(),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Router Connected @ $host',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: colors.onSurfaceVariant.withOpacity(0.7),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(width: 12),
