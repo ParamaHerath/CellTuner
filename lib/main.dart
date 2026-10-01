@@ -299,13 +299,19 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Text(
-                  'Recording Complete',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.3,
+                const Expanded(
+                  child: Text(
+                    'Recording Complete',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                    ),
                   ),
+                ),
+                _DialogCloseButton(
+                  colors: colors,
+                  onPressed: () => Navigator.of(dialogCtx).pop(),
                 ),
               ],
             ),
@@ -367,17 +373,13 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
               ],
             ),
             actions: [
-              TextButton(
-                style: TextButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                onPressed: () => Navigator.of(dialogCtx).pop(),
-                child: const Text('Close'),
-              ),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF16A34A),
+                  side: const BorderSide(
+                    color: Color(0xFF16A34A),
+                    width: 1,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -386,10 +388,13 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
                   RecordingStorage.openFile(result.htmlFile.path);
                 },
                 icon: const Icon(LucideIcons.folderOpen, size: 15),
-                label: const Text('Open File'),
+                label: const Text('Open Folder'),
               ),
               FilledButton.icon(
                 style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF16A34A),
+                  foregroundColor: Colors.white,
+                  overlayColor: Colors.white.withOpacity(0.12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -533,6 +538,7 @@ class _RouterDashboardScreenState extends State<RouterDashboardScreen>
             recordingSession: _recordingSession,
             onStartRecording: _startRecording,
             onStopRecording: () => _stopRecording(save: true),
+            onCancelRecording: () => _stopRecording(save: false),
             lastUpdated: _lastUpdated,
             section: _selectedSection,
             onRefresh: _refresh,
@@ -715,7 +721,6 @@ class _NavigationSidebar extends StatelessWidget {
       ),
       child: Column(
         children: <Widget>[
-          const SizedBox(height: 8),
           for (final item in _items)
             _NavigationItem(
               icon: item.$3,
@@ -734,7 +739,7 @@ class _NavigationSidebar extends StatelessWidget {
             isMobile: isMobile,
             onTap: () => onSectionSelected(_DashboardSection.settings),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
         ],
       ),
     );
@@ -854,6 +859,7 @@ class _DashboardContent extends StatelessWidget {
     this.recordingSession,
     this.onStartRecording,
     this.onStopRecording,
+    this.onCancelRecording,
     required this.lastUpdated,
     required this.section,
     required this.onRefresh,
@@ -878,6 +884,7 @@ class _DashboardContent extends StatelessWidget {
   final SignalRecordingSession? recordingSession;
   final ValueChanged<String>? onStartRecording;
   final VoidCallback? onStopRecording;
+  final VoidCallback? onCancelRecording;
   final DateTime? lastUpdated;
   final _DashboardSection section;
   final VoidCallback onRefresh;
@@ -917,6 +924,7 @@ class _DashboardContent extends StatelessWidget {
                 recordingSession: recordingSession,
                 onStartRecording: onStartRecording,
                 onStopRecording: onStopRecording,
+                onCancelRecording: onCancelRecording,
                 onHostChanged: onHostChanged,
                 onRefreshIntervalChanged: onRefreshIntervalChanged,
                 onSplitCellIdChanged: onSplitCellIdChanged,
@@ -957,6 +965,7 @@ class _SectionPage extends StatelessWidget {
     this.recordingSession,
     this.onStartRecording,
     this.onStopRecording,
+    this.onCancelRecording,
     required this.onHostChanged,
     required this.onRefreshIntervalChanged,
     required this.onSplitCellIdChanged,
@@ -978,6 +987,7 @@ class _SectionPage extends StatelessWidget {
   final SignalRecordingSession? recordingSession;
   final ValueChanged<String>? onStartRecording;
   final VoidCallback? onStopRecording;
+  final VoidCallback? onCancelRecording;
   final ValueChanged<String> onHostChanged;
   final ValueChanged<double> onRefreshIntervalChanged;
   final ValueChanged<bool> onSplitCellIdChanged;
@@ -1028,6 +1038,7 @@ class _SectionPage extends StatelessWidget {
                 defaultDuration: signalTimeWindow,
                 onStartRecording: onStartRecording ?? (_) {},
                 onStopRecording: onStopRecording ?? () {},
+                onCancelRecording: onCancelRecording,
               ),
               _ResetGraphsButton(
                 onReset: onResetSignalGraphs ?? () {},
@@ -1393,18 +1404,65 @@ double parseTimeWindowSeconds(String window) {
   };
 }
 
+class _DialogCloseButton extends StatefulWidget {
+  const _DialogCloseButton({
+    required this.colors,
+    required this.onPressed,
+  });
+
+  final ColorScheme colors;
+  final VoidCallback onPressed;
+
+  @override
+  State<_DialogCloseButton> createState() => _DialogCloseButtonState();
+}
+
+class _DialogCloseButtonState extends State<_DialogCloseButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const red = Color(0xFFEF4444);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: InkWell(
+        onTap: widget.onPressed,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _hovered
+                ? red
+                : widget.colors.surfaceContainerHighest.withOpacity(0.6),
+          ),
+          child: Icon(
+            LucideIcons.x,
+            size: 15,
+            color: _hovered ? Colors.white : widget.colors.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RecordButton extends StatelessWidget {
   const _RecordButton({
     required this.recordingSession,
     required this.defaultDuration,
     required this.onStartRecording,
     required this.onStopRecording,
+    this.onCancelRecording,
   });
 
   final SignalRecordingSession? recordingSession;
   final String defaultDuration;
   final ValueChanged<String> onStartRecording;
   final VoidCallback onStopRecording;
+  final VoidCallback? onCancelRecording;
 
   Future<void> _showStartDialog(BuildContext context) async {
     String selected = defaultDuration;
@@ -1450,21 +1508,9 @@ class _RecordButton extends StatelessWidget {
                         ),
                       ),
                     ),
-                    InkWell(
-                      onTap: () => Navigator.of(dialogCtx).pop(false),
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: colors.surfaceContainerHighest.withOpacity(0.6),
-                        ),
-                        child: Icon(
-                          LucideIcons.x,
-                          size: 15,
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
+                    _DialogCloseButton(
+                      colors: colors,
+                      onPressed: () => Navigator.of(dialogCtx).pop(false),
                     ),
                   ],
                 ),
@@ -1639,6 +1685,8 @@ class _RecordButton extends StatelessWidget {
 
     if (action == 'save') {
       onStopRecording();
+    } else if (action == 'discard') {
+      onCancelRecording?.call();
     }
   }
 
@@ -1648,45 +1696,133 @@ class _RecordButton extends StatelessWidget {
     final isRecording = recordingSession != null;
     final percent = recordingSession?.progressPercent() ?? 0;
 
-    return InkWell(
-      onTap: isRecording ? () => _showStopDialog(context) : () => _showStartDialog(context),
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        height: 32,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: isRecording
-              ? const Color(0xFFEF4444).withOpacity(0.08)
-              : colors.surface,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: isRecording
-                ? const Color(0xFFEF4444).withOpacity(0.5)
-                : colors.outlineVariant.withOpacity(0.5),
+    if (!isRecording) {
+      return InkWell(
+        onTap: () => _showStartDialog(context),
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: colors.outlineVariant.withOpacity(0.5),
+            ),
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            if (isRecording)
-              const _BreathingDot(color: Color(0xFFEF4444), size: 6.5)
-            else
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
               const Icon(
                 LucideIcons.circleDot,
                 size: 14,
                 color: Color(0xFFEF4444),
               ),
-            const SizedBox(width: 8),
-            Text(
-              isRecording ? 'Recording $percent%' : 'Record',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: isRecording ? const Color(0xFFDC2626) : colors.onSurface,
+              const SizedBox(width: 8),
+              Text(
+                'Record',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: colors.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      height: 32,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEF4444).withOpacity(0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: const Color(0xFFEF4444).withOpacity(0.5),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          InkWell(
+            onTap: () => _showStopDialog(context),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(5),
+              bottomLeft: Radius.circular(5),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const _BreathingDot(color: Color(0xFFEF4444), size: 6.5),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Recording $percent%',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFFDC2626),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
+          Container(
+            width: 1,
+            height: 16,
+            color: const Color(0xFFEF4444).withOpacity(0.35),
+          ),
+          _RecordCancelButton(onTap: onCancelRecording),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecordCancelButton extends StatefulWidget {
+  const _RecordCancelButton({required this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  State<_RecordCancelButton> createState() => _RecordCancelButtonState();
+}
+
+class _RecordCancelButtonState extends State<_RecordCancelButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Cancel and discard recording',
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: const BorderRadius.only(
+            topRight: Radius.circular(5),
+            bottomRight: Radius.circular(5),
+          ),
+          child: Container(
+            height: 32,
+            padding: const EdgeInsets.symmetric(horizontal: 7),
+            color: _hovered
+                ? const Color(0xFFEF4444).withOpacity(0.18)
+                : Colors.transparent,
+            child: const Center(
+              child: Icon(
+                LucideIcons.x,
+                size: 13,
+                color: Color(0xFFDC2626),
+              ),
+            ),
+          ),
         ),
       ),
     );

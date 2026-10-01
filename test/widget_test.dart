@@ -224,15 +224,35 @@ void main() {
 
     // Completion popup appears
     expect(find.text('Recording Complete'), findsOneWidget);
-    expect(find.text('Open File'), findsOneWidget);
+    expect(find.text('Open Folder'), findsOneWidget);
     expect(find.text('Open Report'), findsOneWidget);
 
-    // Close completion dialog
-    await tester.tap(find.text('Close'));
+    // Close completion dialog using the top-right X button
+    await tester.tap(find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byIcon(LucideIcons.x),
+    ));
     await tester.pumpAndSettle();
 
     expect(find.text('Recording Complete'), findsNothing);
     expect(find.text('Record'), findsOneWidget);
+
+    // Verify premature cancel X button: start recording again
+    await tester.tap(find.text('Record'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Start Recording'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Recording'), findsOneWidget);
+    expect(find.byTooltip('Cancel and discard recording'), findsOneWidget);
+
+    // Tap premature cancel X button
+    await tester.tap(find.byTooltip('Cancel and discard recording'));
+    await tester.pumpAndSettle();
+
+    // Verify recording was cancelled and discarded
+    expect(find.text('Record'), findsOneWidget);
+    expect(find.text('Recording Complete'), findsNothing);
 
     // Verify reset graphs button exists and can be tapped
     expect(find.byTooltip('Reset and restart graphs'), findsOneWidget);
